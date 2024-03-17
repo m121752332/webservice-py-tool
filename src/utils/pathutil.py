@@ -8,7 +8,7 @@
 """
 import os
 import sys
-from utils import globalvalues
+from src.utils import globalvalues
 
 
 def resource_path(relative_path):
@@ -25,7 +25,7 @@ def resource_path(relative_path):
         # 并把路径存储在_MEIPASS中
         exepath = sys._MEIPASS
     else:
-        exepath = os.path.abspath('.')
+        exepath = os.path.abspath('')
         if len(globalvalues.EXE_PATH) > 0:
             exepath = globalvalues.EXE_PATH
         else:

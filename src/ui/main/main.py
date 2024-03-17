@@ -10,8 +10,8 @@ from suds.client import Client
 from lxml import etree
 import xml.dom.minidom
 import wx
-import ui.main.main_frame as frame
-from utils import pathutil
+import src.ui.main.main_frame as frame
+from src.utils import pathutil
 
 
 class Main(frame.MainFrame):

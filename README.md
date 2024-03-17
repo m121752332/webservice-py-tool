@@ -17,7 +17,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 6. 暫時不支持mac環境打包，如果有想法也可以自己去適配一下 
 
 ## 打包方式
-根目錄下指令 `$ pyinstaller --add-data="img:img" --version-file conf/app_version_info.txt -F -w -n WebService測試工具 -i img/favicon.ico ws-tool.py`
+根目錄下指令 `$ pyinstaller --add-data="src/img:img" --version-file src/conf/app_version_info.txt -F -w -n WebService測試工具 -i src/img/favicon.ico src/ws-tool.py`
 
 ## 內置功能
 

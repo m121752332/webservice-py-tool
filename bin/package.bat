@@ -1,14 +1,14 @@
 @echo off
 echo.
-echo [ĞÅÏ¢] ´ò°üPythonÏîÄ¿£¬Éú³ÉexeÎÄ¼ş¡£
+echo [info] æ‰“åŒ…Pythonå°ˆæ¡ˆï¼Œç”¢ç”ŸexeåŸ·è¡Œæª”ã€‚
 echo.
 
 %~d0
 cd %~dp0
-call pyinstaller --add-data="../img;img" --version-file ../conf/app_version_info.txt -F -w -n WebService²âÊÔ¹¤¾ßV1 -i ../img/favicon.ico  ../ws-tool.py
+call pyinstaller --add-data="../img;img" --version-file ../conf/app_version_info.txt -F -w -n WebServiceæ¸¬è©¦å·¥å…·V1 -i ../img/favicon.ico  ../ws-tool.py
 
 echo.
-echo [ĞÅÏ¢] ´ò°üÍê³É¡£
+echo [info] æ‰“åŒ…å®Œæˆã€‚
 echo.
 
 pause

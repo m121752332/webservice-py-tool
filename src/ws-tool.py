@@ -4,17 +4,15 @@
 # @File : ws-tool.py
 # @Software: vscode
 """
-启动
+啟動
 """
 import wx
-from ui import main
+from src.ui import main
 from loguru import logger
 
 if __name__ == '__main__':
-    """
-    程式入口
-    """
-    logger.add('out.log')
+
+    logger.add('weblog/run.log')
     app = wx.App(False)
     frame = main.Main(None)
     frame.Show(True)
