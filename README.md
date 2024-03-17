@@ -10,7 +10,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 
 ## 開發說明
 1. 安裝依賴：`$ pip install -r requirements.txt`
-2. 使用vscode開發，打開run.py文件，點擊運行→啟動調試，或者F5啟動程序
+2. 使用vscode開發，打開src/ws-tool.py文件，點擊運行→啟動調試，或者F5啟動程序
 3. 其他工具開發，執行`$ python ws-tool.py`運行程序
 4. 打包exe時候直接運行bin/package.bat即可，執行完會生成dist目錄，里面是打包好的運行文件
 5. fbp下的WxPython-UI.fbp文件是頁面設計，需要用[wxFormBuilder](https://github.com/wxFormBuilder/wxFormBuilder)打開
