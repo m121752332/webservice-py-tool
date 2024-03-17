@@ -31,7 +31,16 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 
 <table>
     <tr>
-        <td><img src="https://images.gitee.com/uploads/images/2021/0929/105308_50cae80a_389553.png"/></td>
+        <td><label>收集請求資料內容</label></td>
+    </tr>
+    <tr>
+        <td><img src="docs/webservice_tool_002.png"/></td>
+    </tr>
+    <tr>
+        <td><label>執行請求參數取得回應資料</label></td>
+    </tr>
+    <tr>
+        <td><img src="docs/webservice_tool_003.png"/></td>
     </tr>
 </table>
 

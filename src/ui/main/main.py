@@ -21,6 +21,7 @@ class Main(frame.MainFrame):
                             wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)
         self.Centre()
+        self.m_text_ctrl_params.SetValue("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
 
     def show_message(self, message):
         '''統一顯示對話框
@@ -105,6 +106,8 @@ class Main(frame.MainFrame):
             result = getattr(client.service, method)(**argv)
             logger.info("\n地址: {}\n方法：{}\n參數：{}\n返回: {}", url, method, argv, result)
             encoding = xml.dom.minidom.parseString(result).encoding
+            if not encoding:
+                encoding = 'utf-8'
             str_xml = etree.fromstring(
                 bytes(bytearray(result, encoding=encoding)))
             pretty_xml = etree.tostring(str_xml,
@@ -114,7 +117,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_result.SetValue(pretty_xml.decode(encoding))
         except Exception as err:
             logger.error("發生異常: {}", err)
-            self.show_message("調用發生異常: " + str(err))
+            self.show_message("請求後發生異常: " + str(err))
         finally:
             #啟用按鈕
             self.m_btn_load.Enable()
