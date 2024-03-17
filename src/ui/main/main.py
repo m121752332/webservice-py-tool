@@ -39,7 +39,7 @@ class Main(frame.MainFrame):
         Args:
             client (suds.client): 客戶端對象
         '''
-        return [method for method in client.wsdl.services[0].ports[0].methods]
+        return [method for method in sorted(client.wsdl.services[0].ports[0].methods)]
 
     def get_method_args(self, client, method_str):
         '''獲取WebService方法對應的參數
