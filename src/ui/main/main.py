@@ -83,7 +83,7 @@ class Main(frame.MainFrame):
             return
         select_methods_index = self.m_combo_methods.GetSelection()
         if select_methods_index < 0:
-            self.show_message(u"請選擇調用方法")
+            self.show_message(u"請選擇請求服務方法")
             return
         method = self.m_combo_methods.GetItems()[select_methods_index]
         self.m_text_ctrl_result.Clear()
@@ -97,14 +97,14 @@ class Main(frame.MainFrame):
             client = suds.client.Client(url)
             args = self.get_method_args(client, method)
             if len(args) != len(data):
-                self.show_message(u"該方法需要" + str(len(args)) + "個參數，而你只輸入了" +
+                self.show_message(u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
                                   str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
                 return
             argv = {}
             for index in range(len(args)):
                 argv[args[index][0]] = data[index]
             result = getattr(client.service, method)(**argv)
-            logger.info("\n地址: {}\n方法：{}\n參數：{}\n返回: {}", url, method, argv, result)
+            logger.info("\n網址: {}\n服務：{}\n參數：{}\n回應結果: {}", url, method, argv, result)
             encoding = xml.dom.minidom.parseString(result).encoding
             if not encoding:
                 encoding = 'utf-8'
@@ -117,7 +117,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_result.SetValue(pretty_xml.decode(encoding))
         except Exception as err:
             logger.error("發生異常: {}", err)
-            self.show_message("請求後發生異常: " + str(err))
+            self.show_message("請求服務後發生異常: " + str(err))
         finally:
             #啟用按鈕
             self.m_btn_load.Enable()
