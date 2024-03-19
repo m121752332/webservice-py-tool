@@ -180,6 +180,23 @@ class Main(frame.MainFrame):
     def OnComboBoxMethodSelect(self, event):
         item = event.GetSelection()
 
+    def OnComboBoxMethodText(self, event):
+        return 
+        # 获取ComboBox中已有的选项
+        current_method_options = self.m_combo_methods.GetItems()
+        new_options = [self.m_combo_methods.GetValue()]
+        logger.error("貼上後取得選擇內容: {}", current_method_options)
+        for option in new_options:
+            if option not in current_method_options:
+                # 如果新选项不在当前选项中，则添加到ComboBox中
+                self.m_combo_methods.Append(option)
+            else:
+                # 如果新选项已经存在于当前选项中，则直接设置ComboBox的值为该选项
+                self.m_combo_methods.SetValue(option)
+                break  # 可以选择终止循环，以确保只设置一次值
+
+        item = event.GetSelection()
+
     #  處理退出選單事件
     def OnMenuClickEventExit(self, event):
         dlg = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO)

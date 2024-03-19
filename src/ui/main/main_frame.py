@@ -59,6 +59,9 @@ class MainFrame ( wx.Frame ):
 		bSizerMethods.Add( self.m_combo_methods, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_btn_start = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_start.SetToolTip( u"m_btn_start" )
+		self.m_btn_start.SetHelpText( u"m_btn_start" )
+
 		bSizerMethods.Add( self.m_btn_start, 0, wx.ALIGN_CENTER_VERTICAL, 5 )
 
 		self.m_btn_clear = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"清空", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -104,6 +107,7 @@ class MainFrame ( wx.Frame ):
 		self.Bind( wx.EVT_CLOSE, self.OnMenuClickEventExit )
 		self.m_btn_load.Bind( wx.EVT_BUTTON, self.OnClickEventLoad )
 		self.m_combo_methods.Bind( wx.EVT_COMBOBOX, self.OnComboBoxMethodSelect )
+		self.m_combo_methods.Bind( wx.EVT_TEXT, self.OnComboBoxMethodText )
 		self.m_btn_start.Bind( wx.EVT_BUTTON, self.OnClickEventStart )
 		self.m_btn_clear.Bind( wx.EVT_BUTTON, self.OnClickEventClear )
 
@@ -119,6 +123,9 @@ class MainFrame ( wx.Frame ):
 		event.Skip()
 
 	def OnComboBoxMethodSelect( self, event ):
+		event.Skip()
+
+	def OnComboBoxMethodText( self, event ):
 		event.Skip()
 
 	def OnClickEventStart( self, event ):

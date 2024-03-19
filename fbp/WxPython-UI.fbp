@@ -426,6 +426,8 @@
                     <property name="window_name"></property>
                     <property name="window_style"></property>
                     <event name="OnCombobox">OnComboBoxMethodSelect</event>
+                    <event name="OnText">OnComboBoxMethodText</event>
+                    <event name="OnTextEnter">OnComboBoxMethodTextEnter</event>
                   </object>
                 </object>
                 <object class="sizeritem" expanded="false">
@@ -449,7 +451,7 @@
                     <property name="caption_visible">1</property>
                     <property name="center_pane">0</property>
                     <property name="close_button">1</property>
-                    <property name="context_help"></property>
+                    <property name="context_help">m_btn_start</property>
                     <property name="context_menu">1</property>
                     <property name="current"></property>
                     <property name="default">0</property>
@@ -492,7 +494,7 @@
                     <property name="style"></property>
                     <property name="subclass">; ; forward_declare</property>
                     <property name="toolbar_pane">0</property>
-                    <property name="tooltip"></property>
+                    <property name="tooltip">m_btn_start</property>
                     <property name="validator_data_type"></property>
                     <property name="validator_style">wxFILTER_NONE</property>
                     <property name="validator_type">wxDefaultValidator</property>
