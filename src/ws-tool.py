@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -- coding: utf-8 --
 # @Time : 2021/09/29
 # @Author : Tiger
 # @File : ws-tool.py

@@ -21,8 +21,8 @@ def resource_path(relative_path):
         绝对路径（带临时目录的）
     """
     if hasattr(sys, '_MEIPASS'):
-        # PyInstaller会创建临时文件夹temp
-        # 并把路径存储在_MEIPASS中
+        # PyInstaller会创建临时亙件夹temp
+        # 并把路径存储在_MEIPASS
         exepath = sys._MEIPASS
     else:
         exepath = os.path.abspath('')

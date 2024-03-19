@@ -33,8 +33,9 @@ class MainFrame ( wx.Frame ):
 
 		bSizerUrl.Add( self.m_static_text_url, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
-		self.m_text_ctrl_url = wx.TextCtrl( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, 0 )
-		bSizerUrl.Add( self.m_text_ctrl_url, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		m_combo_urlsChoices = []
+		self.m_combo_urls = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_urlsChoices, 0 )
+		bSizerUrl.Add( self.m_combo_urls, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_btn_load = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"讀取", wx.DefaultPosition, wx.DefaultSize, 0 )
 		bSizerUrl.Add( self.m_btn_load, 0, wx.ALL, 5 )
@@ -51,6 +52,10 @@ class MainFrame ( wx.Frame ):
 
 		m_combo_methodsChoices = []
 		self.m_combo_methods = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_methodsChoices, 0 )
+		self.m_combo_methods.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
+		self.m_combo_methods.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
+		self.m_combo_methods.SetToolTip( u"選擇服務" )
+
 		bSizerMethods.Add( self.m_combo_methods, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_btn_start = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -89,6 +94,9 @@ class MainFrame ( wx.Frame ):
 
 		self.SetSizer( bSizerMain )
 		self.Layout()
+		self.m_status = self.CreateStatusBar( 1, wx.STB_SIZEGRIP, wx.ID_ANY )
+		self.m_status.SetToolTip( u"請選擇網址再選擇服務方法" )
+
 
 		self.Centre( wx.HORIZONTAL )
 
