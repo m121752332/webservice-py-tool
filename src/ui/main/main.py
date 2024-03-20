@@ -11,12 +11,14 @@ from lxml import etree
 import xml.dom.minidom
 import wx
 import src.ui.main.main_frame as frame
+from src.config.ConnectionManager import ConnectionManager
 from src.utils import pathutil
 from src.utils import fileutils
 import json
 
 
 class Main(frame.MainFrame):
+    # 類變數 json_data
     json_data = ""
 
     def __init__(self, parent):
@@ -30,12 +32,35 @@ class Main(frame.MainFrame):
         Main.json_data = fileutils.read_json_from_file(
             pathutil.resource_path('weblog\\connections.profile')
         )
+        logger.info(" {}", type(Main.json_data))
+
+        logger.info(" {}", Main.json_data)
+        # 從字典中提取 connections 部分
+        connections_dict = Main.json_data.get("connections", {})
+        self.connection_manager = ConnectionManager(connections_dict)
+        # for conn in self.connection_manager:
+        #    logger.info(" {}", )
+        self.connection_manager.print_connections_recursively()
+
+        # 連線包建立完成
+
         if len(Main.json_data) == 0:
             return
         urls = self.get_connetions_urls(Main.json_data)
         # TODO: m_combo_urls => m_combo_urls
+        # 設定下拉物件清單
         self.m_combo_urls.SetItems(urls)
+        # 設定選擇0
         self.m_combo_urls.SetSelection(0)
+        self.url = self.m_combo_urls.GetItems()[self.m_combo_urls.GetSelection()]
+        logger.info(" {}", self.m_combo_urls.GetValue())
+        logger.info("url: {}", self.url)
+
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        # logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
 
         # 設定請求內容增加XML起始資訊
         self.m_text_ctrl_params.SetValue("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
@@ -84,14 +109,13 @@ class Main(frame.MainFrame):
     '''
     更新WebService服務方法
     '''
+
     def update_service_methods(self, url, new_methods):
         for data in Main.json_data.values():
             for service in data:
                 if service['url'] == url:
                     service['method'] = new_methods
-
         logger.info(" {}", Main.json_data)
-
 
     # 執行讀取服務的事件
     def OnClickEventLoad(self, event):
@@ -178,22 +202,26 @@ class Main(frame.MainFrame):
 
     # 處理服務方法下拉框選擇事件
     def OnComboBoxMethodSelect(self, event):
+        logger.info('OnComboBoxMethodSelect: %s' % event.GetString())
         item = event.GetSelection()
 
     def OnComboBoxMethodText(self, event):
-        return 
+        logger.info('OnComboBoxMethodText: %s' % event.GetString())
         # 获取ComboBox中已有的选项
-        current_method_options = self.m_combo_methods.GetItems()
-        new_options = [self.m_combo_methods.GetValue()]
-        logger.error("貼上後取得選擇內容: {}", current_method_options)
-        for option in new_options:
-            if option not in current_method_options:
+        #current_method_options = self.m_combo_methods.GetItems()
+        #new_option = event.GetString()
+        #logger.error("貼上後取得選擇內容: {}", current_method_options)
+        #for option in current_method_options.items:
+        #    logger.info("{} {}", option)
+        #    if option == new_option:
                 # 如果新选项不在当前选项中，则添加到ComboBox中
-                self.m_combo_methods.Append(option)
-            else:
+                # self.m_combo_methods.Append(option)
+        #        continue
+        #    else:
                 # 如果新选项已经存在于当前选项中，则直接设置ComboBox的值为该选项
-                self.m_combo_methods.SetValue(option)
-                break  # 可以选择终止循环，以确保只设置一次值
+        #        logger.info("{} {}", option, new_option)
+        #        self.m_combo_methods.SetValue(option)
+        #        break  # 可以选择终止循环，以确保只设置一次值
 
         item = event.GetSelection()
 
@@ -210,4 +238,3 @@ class Main(frame.MainFrame):
         self.m_text_ctrl_params.SetValue("")
         self.m_text_ctrl_result.SetValue("")
         self.m_combo_methods.Clear()
-
