@@ -11,8 +11,8 @@ class ConnectionManager:
         # self.connections = {conn["uuid"]: conn for conn in connections}
         self.connections = {}
         for conn in connections:
-            logger.info(" {}", type(conn))
-            logger.info(" {}", conn)
+            # logger.info(" {}", type(conn))
+            # logger.info(" {}", conn)
             uuid_str = conn["uuid"]
             self.connections[uuid_str] = conn
 

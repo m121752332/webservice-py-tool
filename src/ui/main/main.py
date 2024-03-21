@@ -32,18 +32,16 @@ class Main(frame.MainFrame):
         Main.json_data = fileutils.read_json_from_file(
             pathutil.resource_path('weblog\\connections.profile')
         )
-        logger.info(" {}", type(Main.json_data))
-
-        logger.info(" {}", Main.json_data)
+        # logger.info(" {}", type(Main.json_data))
+        # logger.info(" {}", Main.json_data)
         # 從字典中提取 connections 部分
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
         # for conn in self.connection_manager:
         #    logger.info(" {}", )
-        self.connection_manager.print_connections_recursively()
+        # self.connection_manager.print_connections_recursively()
 
         # 連線包建立完成
-
         if len(Main.json_data) == 0:
             return
         urls = self.get_connetions_urls(Main.json_data)
@@ -62,6 +60,10 @@ class Main(frame.MainFrame):
         logger.info("connect(name) -{}", self.connect.get_name())
         logger.info("connect(url)  -{}", self.connect.get_url())
 
+        # 配置名設定最多輸入100字元
+        self.m_text_ctrl_name.SetValue(self.connect.get_name())
+        self.m_text_ctrl_name.SetMaxLength(100)
+
         # 設定請求內容增加XML起始資訊
         self.m_text_ctrl_params.SetValue("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
 
@@ -75,6 +77,23 @@ class Main(frame.MainFrame):
         '''
         wx.MessageDialog(None, message, u"操作提醒", wx.OK).ShowModal()
 
+    def file_save_reload(self):
+        # 從檔案中讀取資料
+        Main.json_data = fileutils.read_json_from_file(
+            pathutil.resource_path('weblog\\connections.profile')
+        )
+        # 連線包建立完成
+        if len(Main.json_data) == 0:
+            return
+
+        connections_dict = Main.json_data.get("connections", {})
+        self.connection_manager = ConnectionManager(connections_dict)
+
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
+
     def get_connetions_urls(self, data):
         '''獲取WebService方法
 
@@ -87,7 +106,7 @@ class Main(frame.MainFrame):
                 urls.append(service['url'])
         return urls
 
-    def get_methods(self, client):
+    def ws_get_methods(self, client):
         '''獲取WebService方法
 
         Args:
@@ -106,16 +125,42 @@ class Main(frame.MainFrame):
         input_params = method.binding.input
         return input_params.param_defs(method)
 
+    def update_service_name(self, url, name):
+        # 無詢問直接更新配置名方法
+        for data in Main.json_data.values():
+            for service in data:
+                if service['url'] == url:
+                    service['name'] = name
+        logger.info(" {}", Main.json_data)
+        # 更新完高速寫入connections.profile
+        self.write_to_file("weblog\\connections.profile")
+        self.file_save_reload()
+
     '''
     更新WebService服務方法
     '''
 
     def update_service_methods(self, url, new_methods):
+        # 無詢問直接更新服務方法
         for data in Main.json_data.values():
             for service in data:
                 if service['url'] == url:
                     service['method'] = new_methods
         logger.info(" {}", Main.json_data)
+        # 更新完高速寫入connections.profile
+        self.write_to_file("weblog\\connections.profile")
+        self.file_save_reload()
+
+    '''
+    將DICT(json_data)資料寫入 connections.profile
+    '''
+
+    def write_to_file(self, file_name):
+        # 寫入檔案內
+        fileutils.write_json_to_file(
+            Main.json_data,
+            pathutil.resource_path(file_name)
+        )
 
     # 執行讀取服務的事件
     def OnClickEventLoad(self, event):
@@ -130,7 +175,7 @@ class Main(frame.MainFrame):
             logger.info("{}", self.m_combo_urls.GetValue())
             client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
             # methods list loading
-            methods = self.get_methods(client)
+            methods = self.ws_get_methods(client)
             methods_str = json.dumps(methods)
             logger.info(" {}", methods_str)
 
@@ -200,6 +245,55 @@ class Main(frame.MainFrame):
             self.m_btn_start.Enable()
             self.m_btn_clear.Enable()
 
+    def OnTextCtrlNameText(self, event):
+        logger.info('OnTextCtrlNameText: %s' % event.GetString())
+        self.update_service_name(
+            self.m_combo_urls.GetValue(), event.GetString()
+        )
+
+    def OnTextCtrlNameTextEnter(self, event):
+        logger.info('OnTextCtrlNameTextEnter: %s' % event.GetString())
+
+    def OnTextCtrlNameMaxLen(self, event):
+        logger.info('OnTextCtrlNameMaxLen: %s' % event.GetString())
+        dlg = wx.MessageDialog(None, u"輸入太長了", u"輸入提醒", wx.OK | wx.ICON_WARNING)
+        if dlg.ShowModal() == wx.ID_OK:
+            logger.info("還原回:{}", self.connect.get_name())
+            self.m_text_ctrl_name.SetValue(self.connect.get_name())
+
+    def OnComboBoxUrlsSelect(self, event):
+        logger.info('OnComboBoxUrlsSelect: %s' % event.GetString())
+        item = event.GetSelection()
+
+        self.url = self.m_combo_urls.GetItems()[item]
+        logger.info(" {}", self.m_combo_urls.GetValue())
+        logger.info("url: {}", self.url)
+
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        # logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
+
+        # 配置名設定最多輸入100字元
+        self.m_text_ctrl_name.SetValue(self.connect.get_name())
+        self.m_text_ctrl_name.SetMaxLength(100)
+
+    """
+    若網址選擇後，將選擇值改為選擇的connect
+    Args:
+        event (wx.CommandEvent): The event object containing information about the event.
+    Returns:
+        None
+    """
+
+    def OnComboBoxUrlsText(self, event):
+        logger.info('OnComboBoxUrlsText: %s' % event.GetString())
+        item = event.GetSelection()
+
+    def OnComboBoxUrlsEnter(self, event):
+        logger.info('OnComboBoxUrlsEnter: %s' % event.GetString())
+
     # 處理服務方法下拉框選擇事件
     def OnComboBoxMethodSelect(self, event):
         logger.info('OnComboBoxMethodSelect: %s' % event.GetString())
@@ -208,17 +302,17 @@ class Main(frame.MainFrame):
     def OnComboBoxMethodText(self, event):
         logger.info('OnComboBoxMethodText: %s' % event.GetString())
         # 获取ComboBox中已有的选项
-        #current_method_options = self.m_combo_methods.GetItems()
-        #new_option = event.GetString()
-        #logger.error("貼上後取得選擇內容: {}", current_method_options)
-        #for option in current_method_options.items:
+        # current_method_options = self.m_combo_methods.GetItems()
+        # new_option = event.GetString()
+        # logger.error("貼上後取得選擇內容: {}", current_method_options)
+        # for option in current_method_options.items:
         #    logger.info("{} {}", option)
         #    if option == new_option:
-                # 如果新选项不在当前选项中，则添加到ComboBox中
-                # self.m_combo_methods.Append(option)
+        # 如果新选项不在当前选项中，则添加到ComboBox中
+        # self.m_combo_methods.Append(option)
         #        continue
         #    else:
-                # 如果新选项已经存在于当前选项中，则直接设置ComboBox的值为该选项
+        # 如果新选项已经存在于当前选项中，则直接设置ComboBox的值为该选项
         #        logger.info("{} {}", option, new_option)
         #        self.m_combo_methods.SetValue(option)
         #        break  # 可以选择终止循环，以确保只设置一次值

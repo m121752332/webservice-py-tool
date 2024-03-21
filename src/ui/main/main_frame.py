@@ -26,6 +26,19 @@ class MainFrame ( wx.Frame ):
 
 		sbSizerTop = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, wx.EmptyString ), wx.VERTICAL )
 
+		bSizerName = wx.BoxSizer( wx.HORIZONTAL )
+
+		self.m_static_text_name = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"配置名：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_name.Wrap( -1 )
+
+		bSizerName.Add( self.m_static_text_name, 0, wx.ALL, 5 )
+
+		self.m_text_ctrl_name = wx.TextCtrl( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), wx.TE_PROCESS_ENTER )
+		bSizerName.Add( self.m_text_ctrl_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+
+
+		sbSizerTop.Add( bSizerName, 1, wx.EXPAND, 5 )
+
 		bSizerUrl = wx.BoxSizer( wx.HORIZONTAL )
 
 		self.m_static_text_url = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"網址：", wx.DefaultPosition, wx.DefaultSize, 0 )
@@ -51,7 +64,7 @@ class MainFrame ( wx.Frame ):
 		bSizerMethods.Add( self.m_static_text_methods, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		m_combo_methodsChoices = []
-		self.m_combo_methods = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_methodsChoices, 0 )
+		self.m_combo_methods = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_methodsChoices, wx.CB_DROPDOWN|wx.CB_READONLY )
 		self.m_combo_methods.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
 		self.m_combo_methods.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
 		self.m_combo_methods.SetToolTip( u"選擇服務" )
@@ -105,9 +118,16 @@ class MainFrame ( wx.Frame ):
 
 		# Connect Events
 		self.Bind( wx.EVT_CLOSE, self.OnMenuClickEventExit )
+		self.m_text_ctrl_name.Bind( wx.EVT_TEXT, self.OnTextCtrlNameText )
+		self.m_text_ctrl_name.Bind( wx.EVT_TEXT_ENTER, self.OnTextCtrlNameTextEnter )
+		self.m_text_ctrl_name.Bind( wx.EVT_TEXT_MAXLEN, self.OnTextCtrlNameMaxLen )
+		self.m_combo_urls.Bind( wx.EVT_COMBOBOX, self.OnComboBoxUrlsSelect )
+		self.m_combo_urls.Bind( wx.EVT_TEXT, self.OnComboBoxUrlsText )
+		self.m_combo_urls.Bind( wx.EVT_TEXT_ENTER, self.OnComboBoxUrlsEnter )
 		self.m_btn_load.Bind( wx.EVT_BUTTON, self.OnClickEventLoad )
 		self.m_combo_methods.Bind( wx.EVT_COMBOBOX, self.OnComboBoxMethodSelect )
 		self.m_combo_methods.Bind( wx.EVT_TEXT, self.OnComboBoxMethodText )
+		self.m_combo_methods.Bind( wx.EVT_TEXT_ENTER, self.OnComboBoxMethodTextEnter )
 		self.m_btn_start.Bind( wx.EVT_BUTTON, self.OnClickEventStart )
 		self.m_btn_clear.Bind( wx.EVT_BUTTON, self.OnClickEventClear )
 
@@ -119,6 +139,24 @@ class MainFrame ( wx.Frame ):
 	def OnMenuClickEventExit( self, event ):
 		event.Skip()
 
+	def OnTextCtrlNameText( self, event ):
+		event.Skip()
+
+	def OnTextCtrlNameTextEnter( self, event ):
+		event.Skip()
+
+	def OnTextCtrlNameMaxLen( self, event ):
+		event.Skip()
+
+	def OnComboBoxUrlsSelect( self, event ):
+		event.Skip()
+
+	def OnComboBoxUrlsText( self, event ):
+		event.Skip()
+
+	def OnComboBoxUrlsEnter( self, event ):
+		event.Skip()
+
 	def OnClickEventLoad( self, event ):
 		event.Skip()
 
@@ -126,6 +164,9 @@ class MainFrame ( wx.Frame ):
 		event.Skip()
 
 	def OnComboBoxMethodText( self, event ):
+		event.Skip()
+
+	def OnComboBoxMethodTextEnter( self, event ):
 		event.Skip()
 
 	def OnClickEventStart( self, event ):
