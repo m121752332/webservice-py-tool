@@ -3,6 +3,7 @@
 # @Author : Tiger
 # @File : main.py
 # @Software: vscode
+import random
 import sys
 import traceback
 
@@ -42,13 +43,13 @@ class Main(frame.MainFrame):
 
     def __init__(self, parent):
         frame.MainFrame.__init__(self, parent)
-        self.icon = wx.Icon(pathutil.resource_path('img\\favicon.ico'),
+        self.icon = wx.Icon(pathutil.resource_path('img/favicon.ico'),
                             wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)
         self.Centre()
 
         # 執行狀態，初始化給False
-        self.state = False
+        self.open_state = False
         # 配置url給予選擇item
         self.url_item = 0
         # 若配置名稱空白則預設
@@ -71,7 +72,13 @@ class Main(frame.MainFrame):
             # 連線包建立完成
             if len(Main.json_data) == 0:
                 return
+
             urls = self.get_connetions_urls(Main.json_data)
+            if len(urls) == 0:
+                self.add_new_data()
+                urls = self.get_connetions_urls(Main.json_data)
+                self.url_item = 0
+                show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
             # 設定下拉物件清單
             self.m_combo_urls.SetItems(urls)  # 設定後會進入 OnComboBoxUrlsText
@@ -93,7 +100,7 @@ class Main(frame.MainFrame):
             logger.error("讀取失敗: {}", err)
             show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
-        self.state = True
+        self.open_state = True
 
         # 做點限制
         self.m_text_ctrl_name.SetMaxLength(100)
@@ -102,6 +109,61 @@ class Main(frame.MainFrame):
         if self.m_text_ctrl_name.GetValue() == "":
             self.m_text_ctrl_name.SetValue(self.m_text_ctrl_name_placeholder)
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
+
+    def add_new_data(self):
+        logger.info('add_new_data')
+
+        # 下拉選單共多少個
+        url_items_count = self.m_combo_urls.GetCount()
+        self.url_item = self.m_combo_urls.GetSelection()
+        connections_dict = Main.json_data.get("connections", {})
+        self.connection_manager = ConnectionManager(connections_dict)
+
+        web_new_url = u"請輸入網站"
+        connections_dict = Main.json_data.get("connections", {})
+
+        # 新的配置字典
+        new_config = {
+            "uuid": str(uuidutil.get_uuid()),
+            "name": u"",
+            "url": web_new_url,
+            "method": []
+        }
+
+        # 将新的配置字典添加到 connections 列表中
+        connections_dict.append(new_config)
+        Main.json_data = {"connections": connections_dict}
+
+        self.connection_manager = ConnectionManager(connections_dict)
+        self.url = web_new_url
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        # logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
+
+        # Main.json_data 更新完高速寫入connections.profile
+        self.write_to_file("weblog\\connections.profile")
+        self.file_save_reload()
+
+        # 連線包建立完成
+        if len(Main.json_data) == 0:
+            return
+
+        url_selection = url_items_count
+        urls = self.get_connetions_urls(Main.json_data)
+
+        # 設定下拉物件清單
+        self.m_combo_urls.SetItems(urls)
+        # 設定選擇0
+        self.m_combo_urls.SetSelection(url_selection)
+        self.url = self.m_combo_urls.GetItems()[url_selection]
+
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        # logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
 
     def file_save_reload(self):
         # 從檔案中讀取資料
@@ -115,7 +177,7 @@ class Main(frame.MainFrame):
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
 
-        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        self.connect = self.connection_manager.get_connection_by_uuid(self.connect.get_uuid())
         logger.debug("connect(uuid) -{}", str(self.connect.get_uuid()))
         logger.debug("connect(name) -{}", self.connect.get_name())
         logger.debug("connect(url)  -{}", self.connect.get_url())
@@ -160,6 +222,20 @@ class Main(frame.MainFrame):
                 if service['url'] == url:
                     service['name'] = name
         # logger.info(" {}", Main.json_data)
+        # 更新完高速寫入connections.profile
+        self.write_to_file("weblog\\connections.profile")
+        self.file_save_reload()
+
+    def update_service_methods_by_uuid(self, uuid, new_url, new_methods):
+        logger.info("update_service_methods_by_uuid: %s" % uuid)
+        logger.info(" {}", new_methods)
+        # 無詢問直接更新服務方法
+        for data in Main.json_data.values():
+            for service in data:
+                if service['uuid'] == uuid:
+                    service['url'] = new_url
+                    service['method'] = new_methods
+        logger.info(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
         self.write_to_file("weblog\\connections.profile")
         self.file_save_reload()
@@ -237,29 +313,35 @@ class Main(frame.MainFrame):
             # self.m_btn_delete_file.Disable()
             self.form_button_disable()
 
-            self.url_item = self.m_combo_urls.GetSelection()
-            # logger.info("{}", self.m_combo_urls.GetValue())
-            client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
-            # methods list loading
-            methods = self.ws_get_methods(client)
-            # methods_str = json.dumps(methods)
-            # logger.info(" {}", methods_str)
-
+            self.url = self.m_combo_urls.GetValue()
+            # self.connect = self.connection_manager.get_connection_by_url(self.url)
             logger.info("connect(uuid) -{}", self.connect.get_uuid())
             logger.info("connect(name) -{}", self.connect.get_name())
             logger.info("connect(url)  -{}", self.connect.get_url())
 
+            logger.info("Use:{} get methods", self.url)
+            client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
+            # methods list loading
+            methods = self.ws_get_methods(client)
+
             if self.connect.get_uuid() == "":
+                # 應該不會走這段
                 self.update_service_methods_by_name(
                     self.connect.get_name(),
                     self.m_combo_urls.GetValue(),
                     methods
                 )
             else:
-                self.update_service_methods_by_url(
-                    self.m_combo_urls.GetValue(),
+                self.update_service_methods_by_uuid(
+                    self.connect.get_uuid(),
+                    self.url,
                     methods
                 )
+
+            self.connect = self.connection_manager.get_connection_by_url(self.url)
+            logger.info("connect(uuid) -{}", self.connect.get_uuid())
+            logger.info("connect(name) -{}", self.connect.get_name())
+            logger.info("connect(url)  -{}", self.connect.get_url())
 
             self.m_combo_methods.SetItems(methods)
             self.m_combo_methods.SetSelection(0)
@@ -358,7 +440,7 @@ class Main(frame.MainFrame):
     def OnTextCtrlNameText(self, event):
         logger.info('OnTextCtrlNameText: %s' % event.GetString())
 
-        if self.state:
+        if self.open_state:
             self.update_service_name_by_url(
                 self.m_combo_urls.GetValue(), event.GetString()
             )
@@ -393,18 +475,18 @@ class Main(frame.MainFrame):
     """
 
     def OnComboBoxUrlsSelect(self, event):
-        # logger.info('OnComboBoxUrlsSelect: %s' % event.GetString())
-        self.url_item = event.GetSelection()
+        logger.info('OnComboBoxUrlsSelect: %s' % event.GetString())
+        self.url_item = self.m_combo_urls.GetSelection()
 
         self.url = self.m_combo_urls.GetItems()[self.url_item]
         logger.info(" {}", self.m_combo_urls.GetValue())
         logger.info("url: {}", self.url)
 
         self.connect = self.connection_manager.get_connection_by_url(self.url)
-        # logger.info("connect: {}", self.connect)
-        # logger.info("connect(uuid) -{}", self.connect.get_uuid())
-        # logger.info("connect(name) -{}", self.connect.get_name())
-        # logger.info("connect(url)  -{}", self.connect.get_url())
+        logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
 
         # 配置名設定最多輸入100字元
         self.m_text_ctrl_name.SetValue(self.connect.get_name())
@@ -419,13 +501,26 @@ class Main(frame.MainFrame):
 
     def OnComboBoxUrlsText(self, event):
         logger.info('OnComboBoxUrlsText: %s' % event.GetString())
-        self.url_item = event.GetSelection()
-        logger.info('url_select_item: %s' % self.url_item)
-        if self.state:
-            self.update_service_url_by_id(
-                event.GetString(),
-                self.connect.get_uuid()
-            )
+        logger.info(' > self.open_state: %s' % self.open_state)
+        logger.info(' > self.m_combo_urls.GetSelection(): %s' % self.m_combo_urls.GetSelection())
+
+        if self.open_state and self.m_combo_urls.GetSelection() > 0:
+            self.url_item = self.m_combo_urls.GetSelection()
+            logger.info('url_select_item: %s' % self.url_item)
+            self.url = self.m_combo_urls.GetItems()[self.url_item]
+            logger.info('url: %s' % self.url)
+
+            self.connect = self.connection_manager.get_connection_by_url(self.url)
+            # logger.info("connect: {}", self.connect)
+            logger.info("connect(uuid) -{}", self.connect.get_uuid())
+            logger.info("connect(name) -{}", self.connect.get_name())
+            logger.info("connect(url)  -{}", self.connect.get_url())
+
+            if self.open_state:
+                self.update_service_url_by_id(
+                    event.GetString(),
+                    self.connect.get_uuid()
+                )
 
     def OnComboBoxUrlsEnter(self, event):
         logger.info('OnComboBoxUrlsEnter: %s' % event.GetString())
@@ -464,16 +559,25 @@ class Main(frame.MainFrame):
     def OnClickEventAdd(self, event):
         logger.info('OnClickEventAdd: %s' % event.GetString())
 
-        url_selection = self.m_combo_urls.GetSelection()
-        logger.info("url_selection: {} {}", url_selection, self.m_combo_urls.GetValue())
+        # 下拉選單共多少個
+        url_items_count = self.m_combo_urls.GetCount()
+        self.url_item = self.m_combo_urls.GetSelection()
+        logger.info("url count: {} url_selection: {} url_item_value: {}", url_items_count, self.url_item,
+                    self.m_combo_urls.GetValue())
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
+
+        web_new_url = u"請輸入網站"
+        connections_dict = Main.json_data.get("connections", {})
+        for connection in connections_dict:
+            if connection["url"] == web_new_url:
+                web_new_url = u"請輸入網站" + str(random.sample(range(1, 1001), 1))
 
         # 新的配置字典
         new_config = {
             "uuid": str(uuidutil.get_uuid()),
             "name": u"",
-            "url": u"請輸入網站",
+            "url": web_new_url,
             "method": []
         }
 
@@ -489,14 +593,14 @@ class Main(frame.MainFrame):
         if len(Main.json_data) == 0:
             return
 
-        url_selection = url_selection + 1
+        url_selection = url_items_count
         urls = self.get_connetions_urls(Main.json_data)
 
         # 設定下拉物件清單
         self.m_combo_urls.SetItems(urls)
         # 設定選擇0
         self.m_combo_urls.SetSelection(url_selection)
-        self.url = self.m_combo_urls.GetItems()[self.m_combo_urls.GetSelection()]
+        self.url = self.m_combo_urls.GetItems()[url_selection]
 
         self.connect = self.connection_manager.get_connection_by_url(self.url)
         # logger.info("connect: {}", self.connect)
@@ -508,7 +612,7 @@ class Main(frame.MainFrame):
         self.OnTextCtrlNameKillFocus(event)
 
     def OnClickEventDel(self, event):
-        logger.info('OnClickEventDel: %s' % event.GetString())
+        logger.info("OnClickEventDel")
 
         url_selection = 0
         # 連線包建立完成
@@ -516,6 +620,8 @@ class Main(frame.MainFrame):
             return
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
+        self.url = self.m_combo_urls.GetItems()[self.url_item]
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
 
         uuid_to_delete = self.connect.get_uuid()
         for connection in connections_dict:
@@ -525,14 +631,26 @@ class Main(frame.MainFrame):
         self.write_to_file("weblog\\connections.profile")
 
         self.url = self.m_combo_urls.GetItems()[url_selection]
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        logger.info("> url:{}", self.url)
         self.file_save_reload()
 
+        logger.info("{}", Main.json_data)
         urls = self.get_connetions_urls(Main.json_data)
 
         # 設定下拉物件清單
         self.m_combo_urls.SetItems(urls)
+
         # 設定選擇0
         self.m_combo_urls.SetSelection(url_selection)
+        self.connect = self.connection_manager.get_connection_by_url(self.url)
+        # logger.info("connect: {}", self.connect)
+        logger.info("connect(uuid) -{}", self.connect.get_uuid())
+        logger.info("connect(name) -{}", self.connect.get_name())
+        logger.info("connect(url)  -{}", self.connect.get_url())
+
+        # 配置名設定最多輸入100字元
+        self.m_text_ctrl_name.SetValue(self.connect.get_name())
 
     #  處理退出選單事件
     def OnMenuClickEventExit(self, event):

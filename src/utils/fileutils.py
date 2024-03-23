@@ -16,7 +16,7 @@ Write the given data to a JSON file.
 
 
 def write_json_to_file(data, filename):
-    with open(filename, 'w') as file:
+    with open(filename, 'w', encoding='utf-8') as file:
         json.dump(data, file, indent=4)
 
 
@@ -30,6 +30,6 @@ Returns:
 
 
 def read_json_from_file(filename):
-    with open(filename, 'r') as file:
+    with open(filename, 'r', encoding='utf-8') as file:
         data = json.load(file)
         return data

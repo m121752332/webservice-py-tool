@@ -17,7 +17,12 @@ class ConnectionManager:
             self.connections[uuid_str] = conn
 
     def get_connection_by_uuid(self, uuid):
-        return self.connections.get(uuid)
+        # 從 connections 字典中逐筆抓資料
+        for connection in self.connections.values():
+            if connection["uuid"] == uuid:
+                conn = Connect(connection["uuid"], connection["name"], connection["url"], connection["method"])
+                return conn
+        return None
 
     def get_name_by_uuid(self, uuid):
         connection = self.get_connection_by_uuid(uuid)
