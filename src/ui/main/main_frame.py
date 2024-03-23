@@ -28,7 +28,7 @@ class MainFrame ( wx.Frame ):
 
 		bSizerName = wx.BoxSizer( wx.HORIZONTAL )
 
-		self.m_static_text_name = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"配置名：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_name = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"配  置  名：", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text_name.Wrap( -1 )
 
 		bSizerName.Add( self.m_static_text_name, 0, wx.ALL, 5 )
@@ -37,28 +37,63 @@ class MainFrame ( wx.Frame ):
 		bSizerName.Add( self.m_text_ctrl_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 
+		bSizerName.Add( ( 0, 0), 1, wx.EXPAND, 5 )
+
+		self.m_btn_append_connect = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"新增配置", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_append_connect.SetToolTip( u"新增配置[m_btn_append_connect]" )
+
+		bSizerName.Add( self.m_btn_append_connect, 0, wx.ALL, 5 )
+
+		self.m_btn_delete_connect = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"刪除配置", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_delete_connect.SetToolTip( u"刪除配置[m_btn_delete_file]" )
+
+		bSizerName.Add( self.m_btn_delete_connect, 0, wx.ALL, 5 )
+
+
 		sbSizerTop.Add( bSizerName, 1, wx.EXPAND, 5 )
 
 		bSizerUrl = wx.BoxSizer( wx.HORIZONTAL )
 
-		self.m_static_text_url = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"網址：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_url = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"服務網址：", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text_url.Wrap( -1 )
 
 		bSizerUrl.Add( self.m_static_text_url, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		m_combo_urlsChoices = []
-		self.m_combo_urls = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_urlsChoices, 0 )
+		self.m_combo_urls = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_urlsChoices, wx.CB_DROPDOWN )
 		bSizerUrl.Add( self.m_combo_urls, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_btn_load = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"讀取", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_load.SetToolTip( u"讀取[m_btn_load]" )
+
 		bSizerUrl.Add( self.m_btn_load, 0, wx.ALL, 5 )
 
 
 		sbSizerTop.Add( bSizerUrl, 1, wx.EXPAND, 5 )
 
+		bSizerHelp = wx.BoxSizer( wx.HORIZONTAL )
+
+		bSizerHelp.SetMinSize( wx.Size( 0,0 ) )
+		self.m_static_text_dummy = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 100,-1 ), 0 )
+		self.m_static_text_dummy.Wrap( -1 )
+
+		bSizerHelp.Add( self.m_static_text_dummy, 0, wx.ALL, 1 )
+
+		self.m_static_text_tooltip = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"* 結尾請記得加上 ?WSDL 當後綴", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_tooltip.SetLabelMarkup( u"* 結尾請記得加上 ?WSDL 當後綴" )
+		self.m_static_text_tooltip.Wrap( -1 )
+
+		self.m_static_text_tooltip.SetForegroundColour( wx.Colour( 0, 0, 128 ) )
+		self.m_static_text_tooltip.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_HIGHLIGHTTEXT ) )
+
+		bSizerHelp.Add( self.m_static_text_tooltip, 0, wx.ALL, 1 )
+
+
+		sbSizerTop.Add( bSizerHelp, 1, wx.EXPAND, 0 )
+
 		bSizerMethods = wx.BoxSizer( wx.HORIZONTAL )
 
-		self.m_static_text_methods = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"服務：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_methods = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"操作服務：", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text_methods.Wrap( -1 )
 
 		bSizerMethods.Add( self.m_static_text_methods, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
@@ -72,12 +107,14 @@ class MainFrame ( wx.Frame ):
 		bSizerMethods.Add( self.m_combo_methods, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_btn_start = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
-		self.m_btn_start.SetToolTip( u"m_btn_start" )
+		self.m_btn_start.SetToolTip( u"執行請求[m_btn_start]" )
 		self.m_btn_start.SetHelpText( u"m_btn_start" )
 
 		bSizerMethods.Add( self.m_btn_start, 0, wx.ALIGN_CENTER_VERTICAL, 5 )
 
-		self.m_btn_clear = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"清空", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_clear = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"清空服務", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_clear.SetToolTip( u"清空[m_btn_clear]" )
+
 		bSizerMethods.Add( self.m_btn_clear, 0, wx.ALL, 5 )
 
 
@@ -118,9 +155,13 @@ class MainFrame ( wx.Frame ):
 
 		# Connect Events
 		self.Bind( wx.EVT_CLOSE, self.OnMenuClickEventExit )
+		self.m_text_ctrl_name.Bind( wx.EVT_KILL_FOCUS, self.OnTextCtrlNameKillFocus )
+		self.m_text_ctrl_name.Bind( wx.EVT_SET_FOCUS, self.OnTextCtrlNameSetFocus )
 		self.m_text_ctrl_name.Bind( wx.EVT_TEXT, self.OnTextCtrlNameText )
 		self.m_text_ctrl_name.Bind( wx.EVT_TEXT_ENTER, self.OnTextCtrlNameTextEnter )
 		self.m_text_ctrl_name.Bind( wx.EVT_TEXT_MAXLEN, self.OnTextCtrlNameMaxLen )
+		self.m_btn_append_connect.Bind( wx.EVT_BUTTON, self.OnClickEventAdd )
+		self.m_btn_delete_connect.Bind( wx.EVT_BUTTON, self.OnClickEventDel )
 		self.m_combo_urls.Bind( wx.EVT_COMBOBOX, self.OnComboBoxUrlsSelect )
 		self.m_combo_urls.Bind( wx.EVT_TEXT, self.OnComboBoxUrlsText )
 		self.m_combo_urls.Bind( wx.EVT_TEXT_ENTER, self.OnComboBoxUrlsEnter )
@@ -139,6 +180,12 @@ class MainFrame ( wx.Frame ):
 	def OnMenuClickEventExit( self, event ):
 		event.Skip()
 
+	def OnTextCtrlNameKillFocus( self, event ):
+		event.Skip()
+
+	def OnTextCtrlNameSetFocus( self, event ):
+		event.Skip()
+
 	def OnTextCtrlNameText( self, event ):
 		event.Skip()
 
@@ -146,6 +193,12 @@ class MainFrame ( wx.Frame ):
 		event.Skip()
 
 	def OnTextCtrlNameMaxLen( self, event ):
+		event.Skip()
+
+	def OnClickEventAdd( self, event ):
+		event.Skip()
+
+	def OnClickEventDel( self, event ):
 		event.Skip()
 
 	def OnComboBoxUrlsSelect( self, event ):
