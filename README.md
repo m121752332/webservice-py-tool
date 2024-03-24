@@ -19,12 +19,12 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 ## 打包方式
 根目錄下指令  
 #### 打成一包
-`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -D -w -p src/weblog -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
+`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -D -w -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
 #### 打成一個檔案
-`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -F -w -p src/weblog -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
+`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -F -w -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
 
 ## 版本產生
-切到 src/conf 底下輸入  
+切到 src/config 底下輸入  
 `python grab_version.py C:\Windows\System32\WWAHost.exe`  
 系統自動產生 file_version_info.txt 用於包裝到pyinstaller的版本檔案使用
 

@@ -13,6 +13,9 @@ from suds.client import Client
 from lxml import etree
 import xml.dom.minidom
 import wx
+import wx.adv
+from wx.lib.wordwrap import wordwrap
+
 import src.ui.main.main_frame as frame
 from src.config.ConnectionManager import ConnectionManager
 from src.utils import pathutil
@@ -43,6 +46,7 @@ class Main(frame.MainFrame):
 
     def __init__(self, parent):
         frame.MainFrame.__init__(self, parent)
+        self.panel = wx.Panel(self, wx.ID_ANY)
         self.icon = wx.Icon(pathutil.resource_path('img/favicon.ico'),
                             wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)
@@ -177,11 +181,6 @@ class Main(frame.MainFrame):
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
 
-        self.connect = self.connection_manager.get_connection_by_uuid(self.connect.get_uuid())
-        logger.debug("connect(uuid) -{}", str(self.connect.get_uuid()))
-        logger.debug("connect(name) -{}", self.connect.get_name())
-        logger.debug("connect(url)  -{}", self.connect.get_url())
-
     def get_connetions_urls(self, data):
         '''獲取WebService方法
 
@@ -228,14 +227,15 @@ class Main(frame.MainFrame):
 
     def update_service_methods_by_uuid(self, uuid, new_url, new_methods):
         logger.info("update_service_methods_by_uuid: %s" % uuid)
-        logger.info(" {}", new_methods)
+        logger.debug("new_url: {}", new_url)
+        logger.debug("new_methods: {}", new_methods)
         # 無詢問直接更新服務方法
         for data in Main.json_data.values():
             for service in data:
                 if service['uuid'] == uuid:
                     service['url'] = new_url
                     service['method'] = new_methods
-        logger.info(" {}", Main.json_data)
+        logger.debug(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
         self.write_to_file("weblog\\connections.profile")
         self.file_save_reload()
@@ -272,8 +272,8 @@ class Main(frame.MainFrame):
         self.write_to_file("weblog\\connections.profile")
         self.file_save_reload()
 
-    def update_service_url_by_id(self, new_url, uuid):
-        logger.debug("update_service_url_by_id: %s" % uuid)
+    def update_service_url_by_uuid(self, new_url, uuid):
+        logger.debug("update_service_url_by_uuid: %s" % uuid)
         logger.debug("> new_url: {}", new_url)
         if uuid == "" or new_url == "":
             return
@@ -314,6 +314,7 @@ class Main(frame.MainFrame):
             self.form_button_disable()
 
             self.url = self.m_combo_urls.GetValue()
+            logger.info("Use:{} get methods", self.url)
             # self.connect = self.connection_manager.get_connection_by_url(self.url)
             logger.info("connect(uuid) -{}", self.connect.get_uuid())
             logger.info("connect(name) -{}", self.connect.get_name())
@@ -338,10 +339,7 @@ class Main(frame.MainFrame):
                     methods
                 )
 
-            self.connect = self.connection_manager.get_connection_by_url(self.url)
-            logger.info("connect(uuid) -{}", self.connect.get_uuid())
-            logger.info("connect(name) -{}", self.connect.get_name())
-            logger.info("connect(url)  -{}", self.connect.get_url())
+            self.switch_connect_by_url()
 
             self.m_combo_methods.SetItems(methods)
             self.m_combo_methods.SetSelection(0)
@@ -520,7 +518,7 @@ class Main(frame.MainFrame):
             logger.info("connect(url)  -{}", self.connect.get_url())
 
             if self.open_state:
-                self.update_service_url_by_id(
+                self.update_service_url_by_uuid(
                     event.GetString(),
                     self.connect.get_uuid()
                 )
@@ -587,9 +585,9 @@ class Main(frame.MainFrame):
         # 将新的配置字典添加到 connections 列表中
         connections_dict.append(new_config)
         Main.json_data = {"connections": connections_dict}
-
         # Main.json_data 更新完高速寫入connections.profile
         self.write_to_file("weblog\\connections.profile")
+        self.url_item = self.m_combo_urls.GetCount()
         self.file_save_reload()
 
         # 連線包建立完成
@@ -617,13 +615,12 @@ class Main(frame.MainFrame):
     def OnClickEventDel(self, event):
         logger.info("OnClickEventDel")
 
-        url_selection = 0
         # 連線包建立完成
         if len(Main.json_data) == 0:
             return
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
-        self.url = self.m_combo_urls.GetItems()[self.url_item]
+        self.url = self.m_combo_urls.GetValue()
         self.connect = self.connection_manager.get_connection_by_url(self.url)
 
         uuid_to_delete = self.connect.get_uuid()
@@ -632,7 +629,9 @@ class Main(frame.MainFrame):
                 connections_dict.remove(connection)
         Main.json_data = {"connections": connections_dict}
         self.write_to_file("weblog\\connections.profile")
+        self.file_save_reload()
 
+        # 已經無連線紀錄
         if len(connections_dict) == 0:
             self.m_text_ctrl_name.Clear()  # 配置名稱欄位
             self.m_combo_urls.Clear()
@@ -640,34 +639,37 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_params.SetValue("")  # 提交參數區域
             self.m_text_ctrl_result.SetValue("")  # 回應結果區域
             return
-        self.url = self.m_combo_urls.GetItems()[url_selection]
-        self.connect = self.connection_manager.get_connection_by_url(self.url)
-        logger.info("> url:{}", self.url)
-        self.file_save_reload()
 
-        logger.info("{}", Main.json_data)
+        # 重新讀取url選單內容
         urls = self.get_connetions_urls(Main.json_data)
-
-        # 設定下拉物件清單
+        # 設定下拉選單內容
         self.m_combo_urls.SetItems(urls)
+        # 設定選擇第1筆 (index=0)
+        self.url_item = 0
+        self.m_combo_urls.SetSelection(self.url_item)
+        # 如果還有連線資料 就跳回第一筆[index=0]
+        self.url = self.m_combo_urls.GetItems()[self.url_item]
+        # url切換connect物件後顯示名稱
+        self.switch_connect_by_url()
 
-        # 設定選擇0
-        self.m_combo_urls.SetSelection(url_selection)
+    """
+    A method to switch the UUID based on the URL.
+    透過 self.url 取出connect物件資料集
+    """
+    def switch_connect_by_url(self):
+        logger.info("switch_uuid_by_url")
+        # 取得 連線dict 資料放入管理器
+        connections_dict = Main.json_data.get("connections", {})
+        self.connection_manager = ConnectionManager(connections_dict)
+        # 透過sel.url 拿到網址
+        self.url = self.m_combo_urls.GetValue()
+        # 用網址找到連線物件(connect)
         self.connect = self.connection_manager.get_connection_by_url(self.url)
-        # logger.info("connect: {}", self.connect)
+        logger.info("connect: {}", str(self.connect))
         logger.info("connect(uuid) -{}", self.connect.get_uuid())
         logger.info("connect(name) -{}", self.connect.get_name())
         logger.info("connect(url)  -{}", self.connect.get_url())
-
-        # 配置名設定最多輸入100字元
         self.m_text_ctrl_name.SetValue(self.connect.get_name())
-
-    #  處理退出選單事件
-    def OnMenuClickEventExit(self, event):
-        dlg = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO)
-        if dlg.ShowModal() == wx.ID_YES:
-            self.Destroy()
-        dlg.Destroy()
 
     """
     Clears the values of various fields in the UI when the clear button is clicked.
@@ -683,3 +685,42 @@ class Main(frame.MainFrame):
         self.m_combo_methods.Clear()  # 服務方法區域
         self.m_text_ctrl_params.SetValue("")  # 提交參數區域
         self.m_text_ctrl_result.SetValue("")  # 回應結果區域
+
+    '''
+        處理退出選單事件
+        '''
+
+    def OnMenuClickEventAbout(self, event):
+        #app_about = wx.MessageDialog(self,
+        #                       u"作者: Tiger Tseng\n\n版本: v1.0.3\n\ngithub: <a>https://github.com/TigerTseng</a>",
+        #                       u"產品設計師", wx.OK_DEFAULT | wx.ICON_INFORMATION)
+        #if app_about.ShowModal() == wx.ID_OK:
+        #    app_about.Destroy()
+        info = wx.adv.AboutDialogInfo()
+        info.Name = "TIPTOP WebService Tool"
+        info.Version = "v1.1.0"
+        info.Copyright = "(C) 2024 Game Studio"
+        info.Description = wordwrap(
+            '''
+            這是一款針對WebService設計的開源工具，簡單好用配置靈活度高，有興趣研究請上GitHub我的專案
+            ''',
+            350, wx.ClientDC(self.panel))
+        info.SetCopyright("(C) 2023-2024")
+        info.SetWebSite("https://github.com/m121752332/webservice-py-tool")
+        info.AddDeveloper("原創: Tiger Tseng")
+        info.AddTranslator("Tiger Tseng")
+
+        info.License = wordwrap("Completely and totally open source!", 500,
+                                wx.ClientDC(self.panel))
+        # Show the wx.AboutBox
+        wx.adv.AboutBox(info)
+
+
+    '''
+    處理退出選單事件
+    '''
+    def OnMenuClickEventExit(self, event):
+        app_exit = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO)
+        if app_exit.ShowModal() == wx.ID_YES:
+            self.Destroy()
+        app_exit.Destroy()

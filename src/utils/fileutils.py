@@ -8,6 +8,8 @@
 """
 import json
 
+from loguru import logger
+
 """
 Write the given data to a JSON file.
 :param data: the data to be written to the file
@@ -16,6 +18,7 @@ Write the given data to a JSON file.
 
 
 def write_json_to_file(data, filename):
+    logger.debug("write_json_to_file: %s" % filename)
     with open(filename, 'w', encoding='utf-8') as file:
         json.dump(data, file, indent=4)
 

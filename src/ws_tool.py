@@ -15,6 +15,7 @@ if __name__ == '__main__':
     logger.add('weblog/run.log')
     app = wx.App(False)
     frame = main.Main(None)
+    panel = wx.Panel(frame, wx.ID_ANY)
     frame.Show(True)
     try:
         app.MainLoop()

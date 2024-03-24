@@ -10,6 +10,9 @@
 import wx
 import wx.xrc
 
+ID_ESC = 1000
+ID_ABOUT = 1001
+
 ###########################################################################
 ## Class MainFrame
 ###########################################################################
@@ -150,6 +153,21 @@ class MainFrame ( wx.Frame ):
 		self.m_status = self.CreateStatusBar( 1, wx.STB_SIZEGRIP, wx.ID_ANY )
 		self.m_status.SetToolTip( u"請選擇網址再選擇服務方法" )
 
+		self.m_menubar = wx.MenuBar( wx.MB_DOCKABLE )
+		self.file = wx.Menu()
+		self.exit = wx.MenuItem( self.file, ID_ESC, u"離開"+ u"\t" + u"esc", u"按下Esc離開", wx.ITEM_NORMAL )
+		self.file.Append( self.exit )
+
+		self.m_menubar.Append( self.file, u"檔案" )
+
+		self.help = wx.Menu()
+		self.about = wx.MenuItem( self.help, ID_ABOUT, u"About"+ u"\t" + u"f8", u"作者資訊", wx.ITEM_NORMAL )
+		self.help.Append( self.about )
+
+		self.m_menubar.Append( self.help, u"幫助" )
+
+		self.SetMenuBar( self.m_menubar )
+
 
 		self.Centre( wx.HORIZONTAL )
 
@@ -171,6 +189,8 @@ class MainFrame ( wx.Frame ):
 		self.m_combo_methods.Bind( wx.EVT_TEXT_ENTER, self.OnComboBoxMethodTextEnter )
 		self.m_btn_start.Bind( wx.EVT_BUTTON, self.OnClickEventStart )
 		self.m_btn_clear.Bind( wx.EVT_BUTTON, self.OnClickEventClear )
+		self.Bind( wx.EVT_MENU, self.OnMenuClickEventExit, id = self.exit.GetId() )
+		self.Bind( wx.EVT_MENU, self.OnMenuClickEventAbout, id = self.about.GetId() )
 
 	def __del__( self ):
 		pass
@@ -226,6 +246,10 @@ class MainFrame ( wx.Frame ):
 		event.Skip()
 
 	def OnClickEventClear( self, event ):
+		event.Skip()
+
+
+	def OnMenuClickEventAbout( self, event ):
 		event.Skip()
 
 
