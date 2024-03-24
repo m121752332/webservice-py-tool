@@ -18,10 +18,9 @@ from wx.lib.wordwrap import wordwrap
 
 import src.ui.main.main_frame as frame
 from src.config.ConnectionManager import ConnectionManager
-from src.utils import pathutil
+from src.utils import pathutil, yaml_values
 from src.utils import fileutils
 from src.utils import uuidutil
-import json
 
 
 def show_message(message):
@@ -46,8 +45,27 @@ class Main(frame.MainFrame):
 
     def __init__(self, parent):
         frame.MainFrame.__init__(self, parent)
+
+        self.app_config = yaml_values.load_yaml_file(
+            pathutil.resource_abspath('app_data\\ws_tool.yaml')
+        )
+
+        # logger
+        self.app_name = self.app_config['app']['name']
+        self.app_version = self.app_config['app']['version']
+        self.copyright = self.app_config['app']['copyright']
+        # logger.info(f"{self.app_name} {self.app_version}")
+        app_log_path = self.app_config['app']['log']['path']
+        app_log_level = self.app_config['app']['log']['level']
+        logger.add(app_log_path+'/run.log',
+                   retention=self.app_config['app']['log']['retention'])
+
+        logger.info("App 配置:")
+        for config, value in self.app_config['app'].items():
+            logger.info("- {}: {}".format(config, value))
+
         self.panel = wx.Panel(self, wx.ID_ANY)
-        self.icon = wx.Icon(pathutil.resource_path('img/favicon.ico'),
+        self.icon = wx.Icon(pathutil.resource_path(self.app_config['app']['img']),
                             wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)
         self.Centre()
@@ -56,22 +74,17 @@ class Main(frame.MainFrame):
         self.open_state = False
         # 配置url給予選擇item
         self.url_item = 0
+        # 目前連線器物件
+        self.connect = None
         # 若配置名稱空白則預設
         self.m_text_ctrl_name_placeholder = u"請輸入配置名稱，最多100字元"
+        app_connection_path = self.app_config['app']['connection']['path']
+        app_connection_profile = self.app_config['app']['connection']['profile']
+        self.connect_profile = "{}\\{}".format(app_connection_path, app_connection_profile)
 
         try:
             # 從檔案中讀取資料
-            Main.json_data = fileutils.read_json_from_file(
-                pathutil.resource_abspath('weblog\\connections.profile')
-            )
-            # logger.info(" {}", type(Main.json_data))
-            # logger.info(" {}", Main.json_data)
-            # 從字典中提取 connections 部分
-            connections_dict = Main.json_data.get("connections", {})
-            self.connection_manager = ConnectionManager(connections_dict)
-            # for conn in self.connection_manager:
-            #    logger.info(" {}", )
-            # self.connection_manager.print_connections_recursively()
+            self.load_json_data()
 
             # 連線包建立完成
             if len(Main.json_data) == 0:
@@ -88,15 +101,11 @@ class Main(frame.MainFrame):
             self.m_combo_urls.SetItems(urls)  # 設定後會進入 OnComboBoxUrlsText
             # 設定選擇0
             self.m_combo_urls.SetSelection(self.url_item)
+            # 從字典中提取 connections 部分
+            connections_dict = Main.json_data.get("connections", {})
+            self.connection_manager = ConnectionManager(connections_dict)
             self.url = self.m_combo_urls.GetItems()[self.m_combo_urls.GetSelection()]
-            logger.info(" {}", self.m_combo_urls.GetValue())
-            logger.info("url: {}", self.url)
-
-            self.connect = self.connection_manager.get_connection_by_url(self.url)
-            # logger.info("connect: {}", self.connect)
-            logger.info("connect(uuid) -{}", self.connect.get_uuid())
-            logger.info("connect(name) -{}", self.connect.get_name())
-            logger.info("connect(url)  -{}", self.connect.get_url())
+            self.switch_connect_by_url()
 
             # 配置名設定最多輸入100字元
             self.m_text_ctrl_name.SetValue(self.connect.get_name())
@@ -114,8 +123,14 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_name.SetValue(self.m_text_ctrl_name_placeholder)
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
 
+    def load_json_data(self):
+        # 從檔案中讀取資料
+        Main.json_data = fileutils.read_json_from_file(
+            pathutil.resource_abspath(self.connect_profile)
+        )
+
     def add_new_data(self):
-        logger.info('add_new_data')
+        logger.trace('add_new_data')
 
         # 下拉選單共多少個
         url_items_count = self.m_combo_urls.GetCount()
@@ -136,6 +151,7 @@ class Main(frame.MainFrame):
 
         # 将新的配置字典添加到 connections 列表中
         connections_dict.append(new_config)
+
         Main.json_data = {"connections": connections_dict}
 
         self.connection_manager = ConnectionManager(connections_dict)
@@ -145,9 +161,10 @@ class Main(frame.MainFrame):
         logger.info("connect(uuid) -{}", self.connect.get_uuid())
         logger.info("connect(name) -{}", self.connect.get_name())
         logger.info("connect(url)  -{}", self.connect.get_url())
+        # self.switch_connect_by_url()
 
         # Main.json_data 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
         # 連線包建立完成
@@ -171,9 +188,8 @@ class Main(frame.MainFrame):
 
     def file_save_reload(self):
         # 從檔案中讀取資料
-        Main.json_data = fileutils.read_json_from_file(
-            pathutil.resource_abspath("weblog\\connections.profile")
-        )
+        self.load_json_data()
+
         # 連線包建立完成
         if len(Main.json_data) == 0:
             return
@@ -182,11 +198,11 @@ class Main(frame.MainFrame):
         self.connection_manager = ConnectionManager(connections_dict)
 
     def get_connetions_urls(self, data):
-        '''獲取WebService方法
+        """獲取WebService方法
 
         Args:
             client (suds.client): 客戶端對象
-        '''
+        """
         urls = []
         for data in data.values():
             for service in data:
@@ -194,11 +210,11 @@ class Main(frame.MainFrame):
         return urls
 
     def ws_get_methods(self, client):
-        '''獲取WebService方法
+        """獲取WebService方法
 
         Args:
             client (suds.client): 客戶端對象
-        '''
+        """
         return [method for method in sorted(client.wsdl.services[0].ports[0].methods)]
 
     """
@@ -222,7 +238,7 @@ class Main(frame.MainFrame):
                     service['name'] = name
         # logger.info(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
     def update_service_methods_by_uuid(self, uuid, new_url, new_methods):
@@ -237,7 +253,7 @@ class Main(frame.MainFrame):
                     service['method'] = new_methods
         logger.debug(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
     def update_service_methods_by_name(self, name, url, new_methods):
@@ -252,7 +268,7 @@ class Main(frame.MainFrame):
         self.url = url
         logger.info(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
     '''
@@ -269,7 +285,7 @@ class Main(frame.MainFrame):
                     service['method'] = new_methods
         logger.info(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
     def update_service_url_by_uuid(self, new_url, uuid):
@@ -285,18 +301,19 @@ class Main(frame.MainFrame):
         self.url = new_url
         logger.debug(" {}", Main.json_data)
         # 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
     '''
     將DICT(json_data)資料寫入 connections.profile
     '''
 
-    def write_to_file(self, file_name):
+    def write_to_file(self):
+        logger.trace("write_to_file")
         # 寫入檔案內
         fileutils.write_json_to_file(
             Main.json_data,
-            pathutil.resource_abspath(file_name)
+            pathutil.resource_abspath(self.connect_profile)
         )
 
     # 執行讀取服務的事件
@@ -307,20 +324,11 @@ class Main(frame.MainFrame):
             return
         try:
             # 禁用按鈕
-            # self.m_btn_load.Disable()
-            # self.m_btn_start.Disable()
-            # self.m_btn_clear.Disable()
-            # self.m_btn_delete_file.Disable()
             self.form_button_disable()
 
             self.url = self.m_combo_urls.GetValue()
             logger.info("Use:{} get methods", self.url)
-            # self.connect = self.connection_manager.get_connection_by_url(self.url)
-            logger.info("connect(uuid) -{}", self.connect.get_uuid())
-            logger.info("connect(name) -{}", self.connect.get_name())
-            logger.info("connect(url)  -{}", self.connect.get_url())
 
-            logger.info("Use:{} get methods", self.url)
             client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
             # methods list loading
             methods = self.ws_get_methods(client)
@@ -363,10 +371,6 @@ class Main(frame.MainFrame):
             show_message("讀取發生異常: " + str(err))
         finally:
             # 啟用按鈕
-            # self.m_btn_load.Enable()
-            # self.m_btn_start.Enable()
-            # self.m_btn_clear.Enable()
-            # self.m_btn_delete_file.Enable()
             self.form_button_enable()
 
             # 設定下拉物件清單
@@ -586,7 +590,7 @@ class Main(frame.MainFrame):
         connections_dict.append(new_config)
         Main.json_data = {"connections": connections_dict}
         # Main.json_data 更新完高速寫入connections.profile
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.url_item = self.m_combo_urls.GetCount()
         self.file_save_reload()
 
@@ -628,7 +632,7 @@ class Main(frame.MainFrame):
             if connection["uuid"] == uuid_to_delete:
                 connections_dict.remove(connection)
         Main.json_data = {"connections": connections_dict}
-        self.write_to_file("weblog\\connections.profile")
+        self.write_to_file()
         self.file_save_reload()
 
         # 已經無連線紀錄
@@ -656,6 +660,7 @@ class Main(frame.MainFrame):
     A method to switch the UUID based on the URL.
     透過 self.url 取出connect物件資料集
     """
+
     def switch_connect_by_url(self):
         logger.info("switch_uuid_by_url")
         # 取得 連線dict 資料放入管理器
@@ -691,34 +696,29 @@ class Main(frame.MainFrame):
         '''
 
     def OnMenuClickEventAbout(self, event):
-        #app_about = wx.MessageDialog(self,
-        #                       u"作者: Tiger Tseng\n\n版本: v1.0.3\n\ngithub: <a>https://github.com/TigerTseng</a>",
-        #                       u"產品設計師", wx.OK_DEFAULT | wx.ICON_INFORMATION)
-        #if app_about.ShowModal() == wx.ID_OK:
-        #    app_about.Destroy()
         info = wx.adv.AboutDialogInfo()
-        info.Name = "TIPTOP WebService Tool"
-        info.Version = "v1.1.0"
+        info.Name = self.app_name
+        info.Version = self.app_version
         info.Copyright = "(C) 2024 Game Studio"
         info.Description = wordwrap(
             '''
-            這是一款針對WebService設計的開源工具，簡單好用配置靈活度高，有興趣研究請上GitHub我的專案
+            這是一款針對WebService設計的開源工具，簡單好用配置靈活度高，有興趣研究請上GitHub我的專案，連結如下
             ''',
             350, wx.ClientDC(self.panel))
-        info.SetCopyright("(C) 2023-2024")
+        info.SetCopyright(self.copyright)
         info.SetWebSite("https://github.com/m121752332/webservice-py-tool")
         info.AddDeveloper("原創: Tiger Tseng")
-        info.AddTranslator("Tiger Tseng")
+        info.AddTranslator("原創: Tiger Tseng")
 
         info.License = wordwrap("Completely and totally open source!", 500,
                                 wx.ClientDC(self.panel))
         # Show the wx.AboutBox
         wx.adv.AboutBox(info)
 
-
     '''
     處理退出選單事件
     '''
+
     def OnMenuClickEventExit(self, event):
         app_exit = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO)
         if app_exit.ShowModal() == wx.ID_YES:

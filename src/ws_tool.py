@@ -12,7 +12,6 @@ from loguru import logger
 
 if __name__ == '__main__':
 
-    logger.add('weblog/run.log')
     app = wx.App(False)
     frame = main.Main(None)
     panel = wx.Panel(frame, wx.ID_ANY)
@@ -22,3 +21,4 @@ if __name__ == '__main__':
     except Exception as err:
         logger.error('程式發生異常問題: {}', err)
         raise
+

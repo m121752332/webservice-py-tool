@@ -33,7 +33,7 @@ VSVersionInfo(
         StringStruct('FileDescription', 'TIPTOP WebService測試工具'),
         StringStruct('FileVersion', '1.0.3.240323 (WinBuild.160101.0800)'),
         StringStruct('InternalName', 'WebService-Tool'),
-        StringStruct('LegalCopyright', '© Game Studio. All rights reserved.'),
+        StringStruct('LegalCopyright', '© 2024 GameStudio. All rights reserved.'),
         StringStruct('OriginalFilename', 'WebService-Tool.exe'),
         StringStruct('ProductName', 'Microsoft® Windows® Operating System'),
         StringStruct('ProductVersion', '1.0.3.240323')])
