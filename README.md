@@ -3,7 +3,7 @@
 WebService服務部署到了服務器，但是只能本地訪問，下載soapui有點太大了，找其他的測試工具又沒有合適的，就自己寫了個比較簡單的小工具！
 
 * Python 3.8.10
-* WxPython==4.1.0
+* WxPython==4.2.1
 * suds_jurko==0.6
 * lxml==5.1.0
 * setuptools==57.5.0
