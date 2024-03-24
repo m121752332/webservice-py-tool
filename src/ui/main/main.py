@@ -440,6 +440,9 @@ class Main(frame.MainFrame):
     def OnTextCtrlNameText(self, event):
         logger.info('OnTextCtrlNameText: %s' % event.GetString())
 
+        connections_dict = Main.json_data.get("connections", {})
+        if len(connections_dict) == 0:
+            return
         if self.open_state:
             self.update_service_name_by_url(
                 self.m_combo_urls.GetValue(), event.GetString()
@@ -630,6 +633,13 @@ class Main(frame.MainFrame):
         Main.json_data = {"connections": connections_dict}
         self.write_to_file("weblog\\connections.profile")
 
+        if len(connections_dict) == 0:
+            self.m_text_ctrl_name.Clear()  # 配置名稱欄位
+            self.m_combo_urls.Clear()
+            self.m_combo_methods.Clear()  # 服務方法區域
+            self.m_text_ctrl_params.SetValue("")  # 提交參數區域
+            self.m_text_ctrl_result.SetValue("")  # 回應結果區域
+            return
         self.url = self.m_combo_urls.GetItems()[url_selection]
         self.connect = self.connection_manager.get_connection_by_url(self.url)
         logger.info("> url:{}", self.url)
