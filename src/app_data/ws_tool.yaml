@@ -2,7 +2,7 @@ app:
   # Name of the application
   name: "TIPTOP WebService Tool"
   # Version of the application
-  version: "v1.1.0"
+  version: "v1.1.1"
   # Description of the application
   copyright: "Copyright 2024 GameStudio. All rights reserved."
   # Log path of the application
