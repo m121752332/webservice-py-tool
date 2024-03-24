@@ -36,6 +36,8 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 
 - 下載檔案：[WebService.exe](<https://github.com/m121752332/webservice-py-tool/releases>)
 - 下載畫面設計器: [wxFormBuilder](<https://github.com/wxFormBuilder/wxFormBuilder/releases/tag/v4.1.0>)
+
+
 ## 演示效果
 
 <table>
@@ -56,7 +58,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 
 
 
-## 頁面設計
+## 畫面設計器預覽
 
 <table>
     <tr>
