@@ -14,7 +14,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 3. 其他工具開發，執行`$ python ws-tool.py`運行程序
 4. 打包exe時候直接運行bin/package.bat即可，執行完會生成dist目錄，里面是打包好的運行文件
 5. fbp下的WxPython-UI.fbp文件是頁面設計，需要用[wxFormBuilder](https://github.com/wxFormBuilder/wxFormBuilder)打開
-6. 暫時不支持mac環境打包，如果有想法也可以自己去適配一下 
+6. 暫時不支持mac環境打包，如果有想法也可以自己去找到合適的配套方案
 
 ## 打包方式
 根目錄下指令  
