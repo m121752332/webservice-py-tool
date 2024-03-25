@@ -59,7 +59,7 @@
       <property name="window_style">wxTAB_TRAVERSAL</property>
       <property name="xrc_skip_sizer">1</property>
       <event name="OnClose">OnMenuClickEventExit</event>
-      <object class="wxMenuBar" expanded="true">
+      <object class="wxMenuBar" expanded="false">
         <property name="bg"></property>
         <property name="context_help"></property>
         <property name="context_menu">1</property>
@@ -81,7 +81,7 @@
         <property name="window_extra_style"></property>
         <property name="window_name"></property>
         <property name="window_style">wxBORDER_THEME</property>
-        <object class="wxMenu" expanded="true">
+        <object class="wxMenu" expanded="false">
           <property name="label">檔案</property>
           <property name="name">m_file</property>
           <property name="permission">protected</property>
@@ -100,11 +100,11 @@
             <event name="OnMenuSelection">OnMenuClickEventExit</event>
           </object>
         </object>
-        <object class="wxMenu" expanded="true">
+        <object class="wxMenu" expanded="false">
           <property name="label">執行</property>
           <property name="name">m_run</property>
           <property name="permission">protected</property>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -117,7 +117,7 @@
             <property name="shortcut">f1</property>
             <property name="unchecked_bitmap"></property>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -131,7 +131,7 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventDel</event>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -145,11 +145,11 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventLoad</event>
           </object>
-          <object class="separator" expanded="true">
+          <object class="separator" expanded="false">
             <property name="name">m_separator1</property>
             <property name="permission">none</property>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -163,7 +163,7 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventStart</event>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -178,7 +178,7 @@
             <event name="OnMenuSelection">OnClickEventClear</event>
           </object>
         </object>
-        <object class="wxMenu" expanded="true">
+        <object class="wxMenu" expanded="false">
           <property name="label">幫助</property>
           <property name="name">m_help</property>
           <property name="permission">protected</property>
@@ -226,7 +226,7 @@
                 <property name="permission">none</property>
                 <object class="sizeritem" expanded="false">
                   <property name="border">5</property>
-                  <property name="flag">wxALL</property>
+                  <property name="flag">wxALIGN_CENTER_VERTICAL|wxALL</property>
                   <property name="proportion">0</property>
                   <object class="wxStaticText" expanded="false">
                     <property name="BottomDockable">1</property>
@@ -1164,11 +1164,11 @@
             </object>
           </object>
         </object>
-        <object class="sizeritem" expanded="true">
+        <object class="sizeritem" expanded="false">
           <property name="border">5</property>
           <property name="flag">wxEXPAND|wxRESERVE_SPACE_EVEN_IF_HIDDEN</property>
           <property name="proportion">1</property>
-          <object class="wxSplitterWindow" expanded="true">
+          <object class="wxSplitterWindow" expanded="false">
             <property name="BottomDockable">1</property>
             <property name="LeftDockable">1</property>
             <property name="RightDockable">1</property>
@@ -1226,8 +1226,8 @@
             <property name="window_extra_style"></property>
             <property name="window_name"></property>
             <property name="window_style"></property>
-            <object class="splitteritem" expanded="true">
-              <object class="wxPanel" expanded="true">
+            <object class="splitteritem" expanded="false">
+              <object class="wxPanel" expanded="false">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
                 <property name="RightDockable">1</property>

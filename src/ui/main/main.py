@@ -21,6 +21,9 @@ from src.config.ConnectionManager import ConnectionManager
 from src.utils import pathutil, yaml_values
 from src.utils import fileutils
 from src.utils import uuidutil
+from src.utils.balloontip import show_balloon_tip
+import wx.lib.agw.infobar as IB
+import wx.lib.agw.toasterbox as TB
 
 
 def show_message(message):
@@ -45,7 +48,8 @@ class Main(frame.MainFrame):
 
     def __init__(self, parent):
         frame.MainFrame.__init__(self, parent)
-
+        self.TotalMsgs = 1
+        self._infoBar = IB.InfoBar(self)
         self.app_config = yaml_values.load_yaml_file(
             pathutil.resource_abspath('app_data\\ws_tool.yaml')
         )
@@ -57,7 +61,7 @@ class Main(frame.MainFrame):
         # logger.info(f"{self.app_name} {self.app_version}")
         app_log_path = self.app_config['app']['log']['path']
         app_log_level = self.app_config['app']['log']['level']
-        logger.add(app_log_path+'/run.log',
+        logger.add(app_log_path + '/run.log',
                    retention=self.app_config['app']['log']['retention'])
 
         logger.info("App 配置:")
@@ -117,11 +121,78 @@ class Main(frame.MainFrame):
 
         # 做點限制
         self.m_text_ctrl_name.SetMaxLength(100)
+        # show_balloon_tip(self.m_text_ctrl_name,"配置說明","請輸入配置名稱，最多100字元，\n這裡可以輸入各種配置名稱隨時都能修改內容。")
 
         # 若無配置名，顯示欄位解析
         if self.m_text_ctrl_name.GetValue() == "":
             self.m_text_ctrl_name.SetValue(self.m_text_ctrl_name_placeholder)
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
+
+        # wx.CallLater(2000, self.show_info)
+
+    def send_notify(self, event):
+        # 滑鼠座標を取得
+        (x, y) = wx.GetMousePosition()
+
+        # ToasterBox
+        toaster = TB.ToasterBox(self, tbstyle=TB.TB_SIMPLE)
+        toaster.SetTitle("溫馨提示")
+        toaster.SetPopupBackgroundColour((255, 200, 50, 255))
+        # 配置彈出時間
+        toaster.SetPopupPauseTime(3000)
+        toaster.SetPopupScrollSpeed(6)
+        # 配置彈出文字
+        toaster.SetPopupText(event)
+        # 配置彈出窗體大小
+        toaster.SetPopupSize(wx.Size(400, 100))
+        # 配置彈出位置
+        toaster.SetPopupPosition(wx.Position(x - 100, y + 10))
+        # Parameters: 0: 左上角 1: 右上角 2: 左下角 3: 右下角
+        # toaster.SetPopupPositionByInt(3)
+        # 設定彈出字體
+        toaster.SetPopupTextFont(
+            wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, '微軟正黑體'))
+        # toaster.SetUseFocus(True)
+        toaster.Play()
+
+    def send_msg(self, title, message):
+        wx_icon = wx.ArtProvider.GetBitmap(wx.ART_INFORMATION,
+                                           wx.ART_OTHER, (48, 48))
+        (x, y) = wx.GetMousePosition()
+        tb = TB.ToasterBox(wx.GetApp().GetTopWindow(),
+                           TB.TB_COMPLEX,
+                           TB.TB_DEFAULT_STYLE,
+                           TB.TB_ONTIME)
+        tb.SetPopupSize((400, 80))
+        tb.SetPopupPauseTime(3000)
+        tb.SetPopupScrollSpeed(8)
+        # tb.SetPopupPositionByInt(3)
+        # 配置彈出位置
+        tb.SetPopupPosition(wx.Position(x - 100, y + 10))
+
+        # wx controls
+        tb_panel = tb.GetToasterBoxWindow()
+        panel = wx.Panel(tb_panel, -1)
+        # panel.SetBackgroundColour(wx.WHITE)
+        panel.SetBackgroundColour((255, 200, 50, 255))
+        wx_icon = wx.StaticBitmap(panel, -1, wx_icon)
+        title = wx.StaticText(panel, -1, title)
+        message = wx.StaticText(panel, -1, message)
+
+        # wx layout controls
+        ver_sizer = wx.BoxSizer(wx.VERTICAL)
+        ver_sizer.Add(title, 0, wx.ALL, 4)
+        ver_sizer.Add(message, 0, wx.ALL, 4)
+
+        hor_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # hor_sizer.Add(wx_icon, 0, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL | wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, 4)
+        hor_sizer.Add(wx_icon, 0, wx.ALL, 4)
+        hor_sizer.Add(ver_sizer, 1, wx.EXPAND)
+        hor_sizer.Layout()
+        panel.SetSizer(hor_sizer)
+
+        tb.AddPanel(panel)
+        tb.Play()
 
     def load_json_data(self):
         # 從檔案中讀取資料
@@ -319,8 +390,11 @@ class Main(frame.MainFrame):
     # 執行讀取服務的事件
     def OnClickEventLoad(self, event):
         logger.info("OnClickEventLoad: %s" % event.GetString())
+
         if len(self.m_combo_urls.GetValue()) == 0:
-            show_message(u"請填寫WSDL地址")
+            # show_message(u"請填寫WSDL地址")
+            # self.show_notify(u"請填寫WSDL地址")
+            self.send_msg("溫馨提示", u"請填寫WSDL地址")
             return
         try:
             # 禁用按鈕
@@ -720,7 +794,7 @@ class Main(frame.MainFrame):
     '''
 
     def OnMenuClickEventExit(self, event):
-        app_exit = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO)
+        app_exit = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO | wx.ICON_QUESTION)
         if app_exit.ShowModal() == wx.ID_YES:
             self.Destroy()
         app_exit.Destroy()

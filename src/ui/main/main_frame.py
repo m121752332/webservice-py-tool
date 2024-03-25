@@ -74,7 +74,7 @@ class MainFrame ( wx.Frame ):
 		self.m_static_text_name = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"配  置  名：", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text_name.Wrap( -1 )
 
-		bSizerName.Add( self.m_static_text_name, 0, wx.ALL, 5 )
+		bSizerName.Add( self.m_static_text_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
 
 		self.m_text_ctrl_name = wx.TextCtrl( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), wx.TE_PROCESS_ENTER )
 		bSizerName.Add( self.m_text_ctrl_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )

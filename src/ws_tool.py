@@ -14,7 +14,7 @@ if __name__ == '__main__':
 
     app = wx.App(False)
     frame = main.Main(None)
-    panel = wx.Panel(frame, wx.ID_ANY)
+    # panel = wx.Panel(frame, wx.ID_ANY)
     frame.Show(True)
     try:
         app.MainLoop()
