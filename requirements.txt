@@ -20,7 +20,7 @@ pyinstaller-hooks-contrib==2024.3
 pywin32-ctypes==0.2.2
 PyYAML==6.0.1
 six==1.16.0
-suds-jurko==0.6
+suds-py3==1.4.5.0
 tomli==2.0.1
 tomlkit==0.12.4
 typing_extensions==4.10.0
