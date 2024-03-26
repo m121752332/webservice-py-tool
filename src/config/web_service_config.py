@@ -3,8 +3,6 @@
 # @Author : Tiger
 # @File : ConnectionManager.py
 # @Software: vscode
-from loguru import logger
-
 from src.utils import yaml_values, pathutil
 
 

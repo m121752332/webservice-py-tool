@@ -19,12 +19,14 @@ from wx.lib.wordwrap import wordwrap
 import src.ui.main.main_frame as frame
 from src.config.ConnectionManager import ConnectionManager
 from src.config.web_service_config import WebServiceConfig
-from src.utils import pathutil, yaml_values
+from src.utils import pathutil
 from src.utils import fileutils
 from src.utils import uuidutil
 from src.utils.balloontip import show_balloon_tip
 import wx.lib.agw.infobar as IB
 import wx.lib.agw.toasterbox as TB
+
+import src.utils.toaster as toaster
 
 
 def show_message(message):
@@ -91,7 +93,8 @@ class Main(frame.MainFrame):
                 self.add_new_data()
                 urls = self.get_connetions_urls(Main.json_data)
                 self.url_item = 0
-                show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
+                # show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
+                toaster.send_hint(u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
             # 設定下拉物件清單
             self.m_combo_urls.SetItems(urls)  # 設定後會進入 OnComboBoxUrlsText
@@ -107,7 +110,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_name.SetValue(self.connect.get_name())
         except Exception as err:
             logger.error("讀取失敗: {}", err)
-            show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
+            toaster.send_hint(u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
         self.open_state = True
 
@@ -122,6 +125,7 @@ class Main(frame.MainFrame):
 
         # wx.CallLater(2000, self.show_info)
 
+    @DeprecationWarning
     def send_notify(self, event):
         # 滑鼠座標を取得
         (x, y) = wx.GetMousePosition()
@@ -146,45 +150,6 @@ class Main(frame.MainFrame):
             wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, '微軟正黑體'))
         # toaster.SetUseFocus(True)
         toaster.Play()
-
-    def send_msg(self, title, message):
-        wx_icon = wx.ArtProvider.GetBitmap(wx.ART_INFORMATION,
-                                           wx.ART_OTHER, (48, 48))
-        (x, y) = wx.GetMousePosition()
-        tb = TB.ToasterBox(wx.GetApp().GetTopWindow(),
-                           TB.TB_COMPLEX,
-                           TB.TB_DEFAULT_STYLE,
-                           TB.TB_ONTIME)
-        tb.SetPopupSize((400, 80))
-        tb.SetPopupPauseTime(3000)
-        tb.SetPopupScrollSpeed(8)
-        # tb.SetPopupPositionByInt(3)
-        # 配置彈出位置
-        tb.SetPopupPosition(wx.Position(x - 100, y + 10))
-
-        # wx controls
-        tb_panel = tb.GetToasterBoxWindow()
-        panel = wx.Panel(tb_panel, -1)
-        # panel.SetBackgroundColour(wx.WHITE)
-        panel.SetBackgroundColour((255, 200, 50, 255))
-        wx_icon = wx.StaticBitmap(panel, -1, wx_icon)
-        title = wx.StaticText(panel, -1, title)
-        message = wx.StaticText(panel, -1, message)
-
-        # wx layout controls
-        ver_sizer = wx.BoxSizer(wx.VERTICAL)
-        ver_sizer.Add(title, 0, wx.ALL, 4)
-        ver_sizer.Add(message, 0, wx.ALL, 4)
-
-        hor_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # hor_sizer.Add(wx_icon, 0, wx.EXPAND | wx.ALIGN_CENTER_VERTICAL | wx.ALIGN_CENTER_HORIZONTAL | wx.ALL, 4)
-        hor_sizer.Add(wx_icon, 0, wx.ALL, 4)
-        hor_sizer.Add(ver_sizer, 1, wx.EXPAND)
-        hor_sizer.Layout()
-        panel.SetSizer(hor_sizer)
-
-        tb.AddPanel(panel)
-        tb.Play()
 
     def load_json_data(self):
         # 從檔案中讀取資料
@@ -386,7 +351,7 @@ class Main(frame.MainFrame):
         if len(self.m_combo_urls.GetValue()) == 0:
             # show_message(u"請填寫WSDL地址")
             # self.show_notify(u"請填寫WSDL地址")
-            self.send_msg("溫馨提示", u"請填寫WSDL地址")
+            toaster.send_warning("溫馨提示", u"請填寫WSDL地址")
             return
         try:
             # 禁用按鈕
@@ -463,12 +428,12 @@ class Main(frame.MainFrame):
 
         url = self.m_combo_urls.GetValue()
         if len(url) == 0:
-            show_message(u"請填寫WSDL地址")
+            toaster.send_warning(u"溫馨提示", u"請填寫WSDL地址")
             return
 
         select_methods_index = self.m_combo_methods.GetSelection()
         if select_methods_index < 0:
-            show_message(u"請選擇請求服務方法")
+            toaster.send_warning(u"溫馨提示", u"請選擇請求服務方法")
             return
         method = self.m_combo_methods.GetItems()[select_methods_index]
         self.m_text_ctrl_result.Clear()
@@ -480,8 +445,9 @@ class Main(frame.MainFrame):
             client = suds.client.Client(url)
             args = self.get_method_args(client, method)
             if len(args) != len(data):
-                show_message(u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
-                             str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
+                toaster.send_warning(u"溫馨提示",
+                                     u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
+                                     str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
                 return
             argv = {}
             for index in range(len(args)):
@@ -500,7 +466,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_result.SetValue(pretty_xml.decode(encoding))
         except Exception as err:
             logger.error("發生異常: {}", err)
-            show_message("請求服務後發生異常: " + str(err))
+            toaster.send_error(u"~異常~", u"請求服務後發生異常: " + str(err))
         finally:
             # 啟用按鈕
             self.form_button_enable()
