@@ -18,6 +18,7 @@ from wx.lib.wordwrap import wordwrap
 
 import src.ui.main.main_frame as frame
 from src.config.ConnectionManager import ConnectionManager
+from src.config.web_service_config import WebServiceConfig
 from src.utils import pathutil, yaml_values
 from src.utils import fileutils
 from src.utils import uuidutil
@@ -50,26 +51,15 @@ class Main(frame.MainFrame):
         frame.MainFrame.__init__(self, parent)
         self.TotalMsgs = 1
         self._infoBar = IB.InfoBar(self)
-        self.app_config = yaml_values.load_yaml_file(
-            pathutil.resource_abspath('app_data\\ws_tool.yaml')
-        )
 
         # logger
-        self.app_name = self.app_config['app']['name']
-        self.app_version = self.app_config['app']['version']
-        self.copyright = self.app_config['app']['copyright']
-        # logger.info(f"{self.app_name} {self.app_version}")
-        app_log_path = self.app_config['app']['log']['path']
-        app_log_level = self.app_config['app']['log']['level']
-        logger.add(app_log_path + '/run.log',
-                   retention=self.app_config['app']['log']['retention'])
+        self.app_config = WebServiceConfig()
 
-        logger.info("App 配置:")
-        for config, value in self.app_config['app'].items():
-            logger.info("- {}: {}".format(config, value))
+        logger.add(self.app_config.get_app_log_path() + '/run.log',
+                   retention=self.app_config.get_app_log_retention())
 
         self.panel = wx.Panel(self, wx.ID_ANY)
-        self.icon = wx.Icon(pathutil.resource_path(self.app_config['app']['img']),
+        self.icon = wx.Icon(pathutil.resource_path(self.app_config.get_app_img_path()),
                             wx.BITMAP_TYPE_ICO)
         self.SetIcon(self.icon)
         self.Centre()
@@ -82,9 +72,11 @@ class Main(frame.MainFrame):
         self.connect = None
         # 若配置名稱空白則預設
         self.m_text_ctrl_name_placeholder = u"請輸入配置名稱，最多100字元"
-        app_connection_path = self.app_config['app']['connection']['path']
-        app_connection_profile = self.app_config['app']['connection']['profile']
-        self.connect_profile = "{}\\{}".format(app_connection_path, app_connection_profile)
+        print(self.app_config.get_app_connection_path())
+        print(type(self.app_config.get_app_connection_path()))
+        app_connection_path = self.app_config.get_app_connection_path()
+        app_connection_profile = self.app_config.get_app_connection_profile()
+        self.connect_profile = "{}\\{}".format(str(app_connection_path), str(app_connection_profile))
 
         try:
             # 從檔案中讀取資料
@@ -770,22 +762,24 @@ class Main(frame.MainFrame):
         '''
 
     def OnMenuClickEventAbout(self, event):
+        logger.info("OnMenuClickEventAbout")
+        # 開啟About窗口
         info = wx.adv.AboutDialogInfo()
-        info.Name = self.app_name
-        info.Version = self.app_version
-        info.Copyright = "(C) 2024 Game Studio"
-        info.Description = wordwrap(
+        info.SetName(self.app_config.get_app_name())
+        info.SetVersion(self.app_config.get_app_version())
+        info.SetDescription(wordwrap(
             '''
             這是一款針對WebService設計的開源工具，簡單好用配置靈活度高，有興趣研究請上GitHub我的專案，連結如下
             ''',
-            350, wx.ClientDC(self.panel))
-        info.SetCopyright(self.copyright)
+            350, wx.ClientDC(self.panel)))
+        info.SetCopyright(self.app_config.get_app_copyright())
         info.SetWebSite("https://github.com/m121752332/webservice-py-tool")
         info.AddDeveloper("原創: Tiger Tseng")
         info.AddTranslator("原創: Tiger Tseng")
-
-        info.License = wordwrap("Completely and totally open source!", 500,
-                                wx.ClientDC(self.panel))
+        info.AddArtist("原創: Tiger Tseng")
+        info.SetLicence(
+            wordwrap("Completely and totally open source!", 500,
+                     wx.ClientDC(self.panel)))
         # Show the wx.AboutBox
         wx.adv.AboutBox(info)
 

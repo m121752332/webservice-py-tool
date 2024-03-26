@@ -7,12 +7,12 @@ app:
   copyright: "Copyright 2024 GameStudio. All rights reserved."
   # Log path of the application
   log:
-    path: app_data/logs
+    path: "app_data/logs"
     level: info
     retention: "10 days"
   # 服務配置檔位置
   connection:
-    path: app_data
-    profile: connections.profile
+    path: "app_data"
+    profile: "connections.profile"
   # APP icon location
-  img: img/favicon.ico
+  img: "img/favicon.ico"
