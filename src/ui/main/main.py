@@ -693,7 +693,7 @@ class Main(frame.MainFrame):
         處理退出選單事件
         """
         logger.info("OnMenuClickEventAbout")
-        toaster.send("WARN", u"溫馨提示", u"請選擇請求服務方法")
+        toaster.send("WARNING", u"溫馨提示", u"請選擇請求服務方法")
         # 開啟About窗口
         info = wx.adv.AboutDialogInfo()
         info.SetName(self.app_config.get_app_name())
