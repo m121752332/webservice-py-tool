@@ -46,7 +46,11 @@ def send(enum_msg, title, message):
         tb.SetPopupScrollSpeed(8)
         # tb.SetPopupPositionByInt(3)
         # 配置彈出位置
-        tb.SetPopupPosition(wx.Position(x - 100, y + 10))
+        # tb.SetPopupPosition(wx.Position(x - 100, y + 10))
+        # 在主框體中間
+        tb.CenterOnParent()
+        # 在螢幕正中間
+        tb.CenterOnScreen()
 
         # wx controls
         tb_panel = tb.GetToasterBoxWindow()
