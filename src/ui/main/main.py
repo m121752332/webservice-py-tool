@@ -45,12 +45,28 @@ def show_warning(message):
     return dialog
 
 
+def ws_get_methods(client):
+    """獲取WebService方法
+
+    Args:
+        client (suds.client): 客戶端對象
+    """
+    return [method for method in sorted(client.wsdl.services[0].ports[0].methods)]
+
+
+def get_method_args(client, method_str):
+    method = client.wsdl.services[0].ports[0].methods[method_str]
+    input_params = method.binding.input
+    return input_params.param_defs(method)
+
+
 class Main(frame.MainFrame):
     # 類變數 json_data
     json_data = ""
 
     def __init__(self, parent):
         frame.MainFrame.__init__(self, parent)
+        self.urls_list = []
         self.TotalMsgs = 1
         self._infoBar = IB.InfoBar(self)
 
@@ -88,16 +104,16 @@ class Main(frame.MainFrame):
             if len(Main.json_data) == 0:
                 return
 
-            urls = self.get_connetions_urls(Main.json_data)
-            if len(urls) == 0:
+            self.get_connetions_urls()
+            if len(self.urls_list) == 0:
                 self.add_new_data()
-                urls = self.get_connetions_urls(Main.json_data)
+                self.get_connetions_urls()
                 self.url_item = 0
                 # show_message("請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
-                toaster.send_hint(u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
+                toaster.send("INFO", u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
             # 設定下拉物件清單
-            self.m_combo_urls.SetItems(urls)  # 設定後會進入 OnComboBoxUrlsText
+            self.m_combo_urls.SetItems(self.urls_list)  # 設定後會進入 OnComboBoxUrlsText
             # 設定選擇0
             self.m_combo_urls.SetSelection(self.url_item)
             # 從字典中提取 connections 部分
@@ -110,7 +126,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_name.SetValue(self.connect.get_name())
         except Exception as err:
             logger.error("讀取失敗: {}", err)
-            toaster.send_hint(u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
+            toaster.send("INFO", u"初次使用提示", u"請填寫配置名稱再輸入WebService網址，後綴請用?WSDL當結尾")
 
         self.open_state = True
 
@@ -124,32 +140,6 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
 
         # wx.CallLater(2000, self.show_info)
-
-    @DeprecationWarning
-    def send_notify(self, event):
-        # 滑鼠座標を取得
-        (x, y) = wx.GetMousePosition()
-
-        # ToasterBox
-        toaster = TB.ToasterBox(self, tbstyle=TB.TB_SIMPLE)
-        toaster.SetTitle("溫馨提示")
-        toaster.SetPopupBackgroundColour((255, 200, 50, 255))
-        # 配置彈出時間
-        toaster.SetPopupPauseTime(3000)
-        toaster.SetPopupScrollSpeed(6)
-        # 配置彈出文字
-        toaster.SetPopupText(event)
-        # 配置彈出窗體大小
-        toaster.SetPopupSize(wx.Size(400, 100))
-        # 配置彈出位置
-        toaster.SetPopupPosition(wx.Position(x - 100, y + 10))
-        # Parameters: 0: 左上角 1: 右上角 2: 左下角 3: 右下角
-        # toaster.SetPopupPositionByInt(3)
-        # 設定彈出字體
-        toaster.SetPopupTextFont(
-            wx.Font(20, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, '微軟正黑體'))
-        # toaster.SetUseFocus(True)
-        toaster.Play()
 
     def load_json_data(self):
         # 從檔案中讀取資料
@@ -200,10 +190,10 @@ class Main(frame.MainFrame):
             return
 
         url_selection = url_items_count
-        urls = self.get_connetions_urls(Main.json_data)
+        self.get_connetions_urls()
 
         # 設定下拉物件清單
-        self.m_combo_urls.SetItems(urls)
+        self.m_combo_urls.SetItems(self.urls_list)
         # 設定選擇0
         self.m_combo_urls.SetSelection(url_selection)
         self.url = self.m_combo_urls.GetItems()[url_selection]
@@ -225,25 +215,14 @@ class Main(frame.MainFrame):
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
 
-    def get_connetions_urls(self, data):
+    def get_connetions_urls(self):
         """獲取WebService方法
 
-        Args:
-            client (suds.client): 客戶端對象
         """
-        urls = []
-        for data in data.values():
+        self.urls_list = []
+        for data in Main.json_data.values():
             for service in data:
-                urls.append(service['url'])
-        return urls
-
-    def ws_get_methods(self, client):
-        """獲取WebService方法
-
-        Args:
-            client (suds.client): 客戶端對象
-        """
-        return [method for method in sorted(client.wsdl.services[0].ports[0].methods)]
+                self.urls_list.append(service['url'])
 
     """
     獲取WebService方法對應的參數
@@ -252,11 +231,6 @@ class Main(frame.MainFrame):
         client (suds.client): 客戶端對象
         method_str (str): 方法名稱
     """
-
-    def get_method_args(self, client, method_str):
-        method = client.wsdl.services[0].ports[0].methods[method_str]
-        input_params = method.binding.input
-        return input_params.param_defs(method)
 
     def update_service_name_by_url(self, url, name):
         # 無詢問直接更新配置名方法
@@ -299,11 +273,10 @@ class Main(frame.MainFrame):
         self.write_to_file()
         self.file_save_reload()
 
-    '''
-    更新WebService服務方法
-    '''
-
     def update_service_methods_by_url(self, url, new_methods):
+        """
+        更新WebService服務方法
+        """
         logger.info("update_service_methods_by_url: %s" % url)
         logger.info(" {}", new_methods)
         # 無詢問直接更新服務方法
@@ -332,11 +305,10 @@ class Main(frame.MainFrame):
         self.write_to_file()
         self.file_save_reload()
 
-    '''
-    將DICT(json_data)資料寫入 connections.profile
-    '''
-
     def write_to_file(self):
+        """
+        將DICT(json_data)資料寫入 connections.profile
+        """
         logger.trace("write_to_file")
         # 寫入檔案內
         fileutils.write_json_to_file(
@@ -351,7 +323,7 @@ class Main(frame.MainFrame):
         if len(self.m_combo_urls.GetValue()) == 0:
             # show_message(u"請填寫WSDL地址")
             # self.show_notify(u"請填寫WSDL地址")
-            toaster.send_warning("溫馨提示", u"請填寫WSDL地址")
+            toaster.send("WARNING", u"溫馨提示", u"請填寫WSDL地址")
             return
         try:
             # 禁用按鈕
@@ -362,7 +334,7 @@ class Main(frame.MainFrame):
 
             client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
             # methods list loading
-            methods = self.ws_get_methods(client)
+            methods = ws_get_methods(client)
 
             if self.connect.get_uuid() == "":
                 # 應該不會走這段
@@ -405,8 +377,8 @@ class Main(frame.MainFrame):
             self.form_button_enable()
 
             # 設定下拉物件清單
-            urls = self.get_connetions_urls(Main.json_data)
-            self.m_combo_urls.SetItems(urls)
+            self.get_connetions_urls()
+            self.m_combo_urls.SetItems(self.urls_list)
             self.m_combo_urls.SetSelection(self.url_item)
 
     def form_button_enable(self):
@@ -423,17 +395,18 @@ class Main(frame.MainFrame):
         self.m_btn_append_connect.Disable()
         self.m_btn_delete_connect.Disable()
 
-    # 處理請求執行處理的事件
     def OnClickEventStart(self, event):
-
+        """
+        處理請求執行處理的事件
+        """
         url = self.m_combo_urls.GetValue()
         if len(url) == 0:
-            toaster.send_warning(u"溫馨提示", u"請填寫WSDL地址")
+            toaster.send("WARNING", u"溫馨提示", u"請填寫WSDL地址")
             return
 
         select_methods_index = self.m_combo_methods.GetSelection()
         if select_methods_index < 0:
-            toaster.send_warning(u"溫馨提示", u"請選擇請求服務方法")
+            toaster.send("WARNING", u"溫馨提示", u"請選擇請求服務方法")
             return
         method = self.m_combo_methods.GetItems()[select_methods_index]
         self.m_text_ctrl_result.Clear()
@@ -443,11 +416,11 @@ class Main(frame.MainFrame):
             data = self.m_text_ctrl_params.GetValue().replace('\n',
                                                               '').split('#~#')
             client = suds.client.Client(url)
-            args = self.get_method_args(client, method)
+            args = get_method_args(client, method)
             if len(args) != len(data):
-                toaster.send_warning(u"溫馨提示",
-                                     u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
-                                     str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
+                toaster.send("WARNING", u"溫馨提示",
+                             u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
+                             str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
                 return
             argv = {}
             for index in range(len(args)):
@@ -466,7 +439,7 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_result.SetValue(pretty_xml.decode(encoding))
         except Exception as err:
             logger.error("發生異常: {}", err)
-            toaster.send_error(u"~異常~", u"請求服務後發生異常: " + str(err))
+            toaster.send("ERROR", u"~異常~", u"請求服務後發生異常: " + str(err))
         finally:
             # 啟用按鈕
             self.form_button_enable()
@@ -503,15 +476,14 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
         event.Skip()
 
-    """
-    若網址選擇，將選擇值改為選擇的connect
-    Args:
-        event (wx.CommandEvent): The event object containing information about the event.
-    Returns:
-        None
-    """
-
     def OnComboBoxUrlsSelect(self, event):
+        """
+        若網址選擇，將選擇值改為選擇的connect
+        Args:
+            event (wx.CommandEvent): The event object containing information about the event.
+        Returns:
+            None
+        """
         logger.info('OnComboBoxUrlsSelect: %s' % event.GetString())
         self.url_item = self.m_combo_urls.GetSelection()
 
@@ -528,15 +500,14 @@ class Main(frame.MainFrame):
         # 配置名設定最多輸入100字元
         self.m_text_ctrl_name.SetValue(self.connect.get_name())
 
-    """
-    若網址選擇後直接貼上值
-    Args:
-        event (wx.CommandEvent): The event object containing information about the event.
-    Returns:
-        None
-    """
-
     def OnComboBoxUrlsText(self, event):
+        """
+        若網址選擇後直接貼上值
+        Args:
+            event (wx.CommandEvent): The event object containing information about the event.
+        Returns:
+            None
+        """
         logger.info('OnComboBoxUrlsText: %s' % event.GetString())
         logger.info(' > self.open_state: %s' % self.open_state)
         logger.info(' > self.m_combo_urls.GetSelection(): %s' % self.m_combo_urls.GetSelection())
@@ -567,33 +538,29 @@ class Main(frame.MainFrame):
         logger.info('OnComboBoxMethodSelect: %s' % event.GetString())
         item = event.GetSelection()
 
-    """
-    Handle the event when the text in the ComboBox changes.
-
-    Args:
-        event: The event object containing information about the text change.
-
-    Returns:
-        None
-    """
-
     def OnComboBoxMethodText(self, event):
+        """
+        Handle the event when the text in the ComboBox changes.
+        Args:
+            event: The event object containing information about the text change.
+        Returns:
+            None
+        """
         logger.info('OnComboBoxMethodText: %s' % event.GetString())
 
         item = event.GetSelection()
 
-    """
-    Handle the event when the menu click event for exiting is triggered.
-
-    Args:
-        self: The object instance.
-        event: The event object.
-
-    Returns:
-        None
-    """
-
     def OnClickEventAdd(self, event):
+        """
+        Handle the event when the menu click event for exiting is triggered.
+
+        Args:
+            self: The object instance.
+            event: The event object.
+
+        Returns:
+            None
+        """
         logger.info('OnClickEventAdd: %s' % event.GetString())
 
         # 下拉選單共多少個
@@ -631,10 +598,10 @@ class Main(frame.MainFrame):
             return
 
         url_selection = url_items_count
-        urls = self.get_connetions_urls(Main.json_data)
+        self.get_connetions_urls()
 
         # 設定下拉物件清單
-        self.m_combo_urls.SetItems(urls)
+        self.m_combo_urls.SetItems(self.urls_list)
         # 設定選擇0
         self.m_combo_urls.SetSelection(url_selection)
         self.url = self.m_combo_urls.GetItems()[url_selection]
@@ -677,9 +644,9 @@ class Main(frame.MainFrame):
             return
 
         # 重新讀取url選單內容
-        urls = self.get_connetions_urls(Main.json_data)
+        self.get_connetions_urls()
         # 設定下拉選單內容
-        self.m_combo_urls.SetItems(urls)
+        self.m_combo_urls.SetItems(self.urls_list)
         # 設定選擇第1筆 (index=0)
         self.url_item = 0
         self.m_combo_urls.SetSelection(self.url_item)
@@ -688,13 +655,12 @@ class Main(frame.MainFrame):
         # url切換connect物件後顯示名稱
         self.switch_connect_by_url()
 
-    """
-    A method to switch the UUID based on the URL.
-    透過 self.url 取出connect物件資料集
-    """
-
     def switch_connect_by_url(self):
         logger.info("switch_uuid_by_url")
+        """
+        A method to switch the UUID based on the URL.
+        透過 self.url 取出connect物件資料集
+        """
         # 取得 連線dict 資料放入管理器
         connections_dict = Main.json_data.get("connections", {})
         self.connection_manager = ConnectionManager(connections_dict)
@@ -708,27 +674,26 @@ class Main(frame.MainFrame):
         logger.info("connect(url)  -{}", self.connect.get_url())
         self.m_text_ctrl_name.SetValue(self.connect.get_name())
 
-    """
-    Clears the values of various fields in the UI when the clear button is clicked.
-
-    :param event: The event object that triggered the click event.
-    :return: None
-    """
-
     # 處理清空按鈕的事件
     def OnClickEventClear(self, event):
+        """
+        Clears the values of various fields in the UI when the clear button is clicked.
+
+        :param event: The event object that triggered the click event.
+        :return: None
+        """
         # self.m_text_ctrl_name.SetValue("")  # 配置名稱欄位
         # self.m_combo_urls.SetValue("")      # 網址欄位
         self.m_combo_methods.Clear()  # 服務方法區域
         self.m_text_ctrl_params.SetValue("")  # 提交參數區域
         self.m_text_ctrl_result.SetValue("")  # 回應結果區域
 
-    '''
-        處理退出選單事件
-        '''
-
     def OnMenuClickEventAbout(self, event):
+        """
+        處理退出選單事件
+        """
         logger.info("OnMenuClickEventAbout")
+        toaster.send("WARN", u"溫馨提示", u"請選擇請求服務方法")
         # 開啟About窗口
         info = wx.adv.AboutDialogInfo()
         info.SetName(self.app_config.get_app_name())
@@ -749,11 +714,10 @@ class Main(frame.MainFrame):
         # Show the wx.AboutBox
         wx.adv.AboutBox(info)
 
-    '''
-    處理退出選單事件
-    '''
-
     def OnMenuClickEventExit(self, event):
+        """
+        處理退出選單事件
+        """
         app_exit = wx.MessageDialog(None, u"確定退出嗎？", u"退出提醒", wx.YES_NO | wx.ICON_QUESTION)
         if app_exit.ShowModal() == wx.ID_YES:
             self.Destroy()
