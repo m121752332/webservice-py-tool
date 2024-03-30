@@ -25,9 +25,9 @@ ID_ABOUT = 1006
 class MainFrame ( wx.Frame ):
 
 	def __init__( self, parent ):
-		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"WebService測試工具", pos = wx.DefaultPosition, size = wx.Size( 800,550 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
+		wx.Frame.__init__ ( self, parent, id = wx.ID_ANY, title = u"WebService測試工具", pos = wx.DefaultPosition, size = wx.Size( 800,500 ), style = wx.DEFAULT_FRAME_STYLE|wx.TAB_TRAVERSAL )
 
-		self.SetSizeHints( wx.Size( 800,550 ), wx.Size( -1,-1 ) )
+		self.SetSizeHints( wx.Size( 800,500 ), wx.Size( -1,-1 ) )
 		self.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
 
 		self.m_menubar = wx.MenuBar( 0|wx.BORDER_THEME )
@@ -65,110 +65,121 @@ class MainFrame ( wx.Frame ):
 
 		self.SetMenuBar( self.m_menubar )
 
-		bSizerMain = wx.BoxSizer( wx.VERTICAL )
+		gSizer3 = wx.GridSizer( 1, 1, 0, 0 )
 
-		sbSizerTop = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, wx.EmptyString ), wx.VERTICAL )
+		sbSizerTop = wx.StaticBoxSizer( wx.StaticBox( self, wx.ID_ANY, wx.EmptyString ), wx.HORIZONTAL )
 
-		bSizerName = wx.BoxSizer( wx.HORIZONTAL )
+		self.m_splitter4 = wx.SplitterWindow( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.SP_3D )
+		self.m_splitter4.Bind( wx.EVT_IDLE, self.m_splitter4OnIdle )
+		self.m_splitter4.SetMinimumPaneSize( 150 )
 
-		self.m_static_text_name = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"配  置  名：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_panel4 = wx.Panel( self.m_splitter4, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
+		gb_sizer_main = wx.GridBagSizer( 0, 0 )
+		gb_sizer_main.SetFlexibleDirection( wx.BOTH )
+		gb_sizer_main.SetNonFlexibleGrowMode( wx.FLEX_GROWMODE_SPECIFIED )
+		gb_sizer_main.SetEmptyCellSize( wx.Size( 5,5 ) )
+
+		self.m_static_text_name = wx.StaticText( self.m_panel4, wx.ID_ANY, u"配  置  名：", wx.Point( -1,-1 ), wx.DefaultSize, 0 )
 		self.m_static_text_name.Wrap( -1 )
 
-		bSizerName.Add( self.m_static_text_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_static_text_name, wx.GBPosition( 0, 0 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 5 )
 
-		self.m_text_ctrl_name = wx.TextCtrl( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 200,-1 ), wx.TE_PROCESS_ENTER )
-		bSizerName.Add( self.m_text_ctrl_name, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		self.m_text_ctrl_name = wx.TextCtrl( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.Point( 0,1 ), wx.Size( 200,-1 ), wx.TE_PROCESS_ENTER )
+		self.m_text_ctrl_name.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_INFOBK ) )
 
+		gb_sizer_main.Add( self.m_text_ctrl_name, wx.GBPosition( 0, 1 ), wx.GBSpan( 1, 4 ), wx.ALL, 5 )
 
-		bSizerName.Add( ( 0, 0), 1, wx.EXPAND, 5 )
-
-		self.m_btn_append_connect = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"新增配置", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_append_connect = wx.Button( self.m_panel4, wx.ID_ANY, u"新增配置", wx.Point( 0,3 ), wx.DefaultSize, 0 )
+		self.m_btn_append_connect.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_append_connect.SetToolTip( u"新增配置[m_btn_append_connect]" )
 
-		bSizerName.Add( self.m_btn_append_connect, 0, wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_btn_append_connect, wx.GBPosition( 0, 9 ), wx.GBSpan( 1, 1 ), wx.ALIGN_RIGHT|wx.ALL|wx.RIGHT, 5 )
 
-		self.m_btn_delete_connect = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"刪除配置", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_delete_connect = wx.Button( self.m_panel4, wx.ID_ANY, u"刪除配置", wx.Point( -1,-1 ), wx.DefaultSize, 0 )
+		self.m_btn_delete_connect.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_delete_connect.SetToolTip( u"刪除配置[m_btn_delete_file]" )
 
-		bSizerName.Add( self.m_btn_delete_connect, 0, wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_btn_delete_connect, wx.GBPosition( 0, 10 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND|wx.RIGHT, 5 )
 
-
-		sbSizerTop.Add( bSizerName, 1, wx.EXPAND, 5 )
-
-		bSizerUrl = wx.BoxSizer( wx.HORIZONTAL )
-
-		self.m_static_text_url = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"服務網址：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_url = wx.StaticText( self.m_panel4, wx.ID_ANY, u"服務網址：", wx.Point( -1,-1 ), wx.DefaultSize, 0 )
 		self.m_static_text_url.Wrap( -1 )
 
-		bSizerUrl.Add( self.m_static_text_url, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_static_text_url, wx.GBPosition( 1, 0 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 5 )
 
 		m_combo_urlsChoices = []
-		self.m_combo_urls = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_urlsChoices, wx.CB_DROPDOWN )
-		bSizerUrl.Add( self.m_combo_urls, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		self.m_combo_urls = wx.ComboBox( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_urlsChoices, wx.CB_DROPDOWN )
+		self.m_combo_urls.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_INFOBK ) )
 
-		self.m_btn_load = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"讀取", wx.DefaultPosition, wx.DefaultSize, 0 )
+		gb_sizer_main.Add( self.m_combo_urls, wx.GBPosition( 1, 1 ), wx.GBSpan( 1, 5 ), wx.ALL|wx.EXPAND, 5 )
+
+		self.m_btn_load = wx.Button( self.m_panel4, wx.ID_ANY, u"讀取", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_load.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
+		self.m_btn_load.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_load.SetToolTip( u"讀取[m_btn_load]" )
 
-		bSizerUrl.Add( self.m_btn_load, 0, wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_btn_load, wx.GBPosition( 1, 6 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 5 )
 
+		self.m_static_text_help = wx.StaticText( self.m_panel4, wx.ID_ANY, u"   *結尾請記得加上 ?WSDL 當後綴", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_help.Wrap( -1 )
 
-		sbSizerTop.Add( bSizerUrl, 1, wx.EXPAND, 5 )
+		self.m_static_text_help.SetFont( wx.Font( 8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD, False, "微軟正黑體" ) )
+		self.m_static_text_help.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_HIGHLIGHT ) )
+		self.m_static_text_help.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
 
-		bSizerHelp = wx.BoxSizer( wx.HORIZONTAL )
+		gb_sizer_main.Add( self.m_static_text_help, wx.GBPosition( 2, 1 ), wx.GBSpan( 1, 1 ), wx.ALIGN_BOTTOM|wx.EXPAND, 1 )
 
-		bSizerHelp.SetMinSize( wx.Size( 0,0 ) )
-		self.m_static_text_dummy = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 80,-1 ), 0 )
-		self.m_static_text_dummy.Wrap( -1 )
+		self.m_static_text = wx.StaticText( self.m_panel4, wx.ID_ANY, u"逾時秒數(3~10秒)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text.Wrap( -1 )
 
-		bSizerHelp.Add( self.m_static_text_dummy, 0, wx.ALL, 1 )
+		gb_sizer_main.Add( self.m_static_text, wx.GBPosition( 3, 8 ), wx.GBSpan( 1, 2 ), wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-		self.m_static_text_tooltip = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"* 結尾請記得加上 ?WSDL 當後綴", wx.DefaultPosition, wx.DefaultSize, 0 )
-		self.m_static_text_tooltip.SetLabelMarkup( u"* 結尾請記得加上 ?WSDL 當後綴" )
-		self.m_static_text_tooltip.Wrap( -1 )
+		self.m_spin_ctrl_timeout = wx.SpinCtrl( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.Point( -1,-1 ), wx.Size( 80,-1 ), wx.ALIGN_RIGHT|wx.SP_ARROW_KEYS, 3, 10, 3 )
+		self.m_spin_ctrl_timeout.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_INFOBK ) )
+		self.m_spin_ctrl_timeout.SetToolTip( u"逾時時間設置" )
+		self.m_spin_ctrl_timeout.SetHelpText( u"逾時時間設置" )
 
-		self.m_static_text_tooltip.SetForegroundColour( wx.Colour( 0, 0, 128 ) )
-		self.m_static_text_tooltip.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_HIGHLIGHTTEXT ) )
+		gb_sizer_main.Add( self.m_spin_ctrl_timeout, wx.GBPosition( 3, 10 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND|wx.RIGHT, 5 )
 
-		bSizerHelp.Add( self.m_static_text_tooltip, 0, wx.ALL, 1 )
-
-
-		sbSizerTop.Add( bSizerHelp, 1, wx.EXPAND, 0 )
-
-		bSizerMethods = wx.BoxSizer( wx.HORIZONTAL )
-
-		self.m_static_text_methods = wx.StaticText( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"操作服務：", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text_methods = wx.StaticText( self.m_panel4, wx.ID_ANY, u"操作服務：", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text_methods.Wrap( -1 )
 
-		bSizerMethods.Add( self.m_static_text_methods, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_static_text_methods, wx.GBPosition( 4, 0 ), wx.GBSpan( 1, 1 ), wx.ALL, 5 )
 
 		m_combo_methodsChoices = []
-		self.m_combo_methods = wx.ComboBox( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_methodsChoices, wx.CB_DROPDOWN|wx.CB_READONLY )
+		self.m_combo_methods = wx.ComboBox( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, m_combo_methodsChoices, wx.CB_DROPDOWN|wx.CB_READONLY )
 		self.m_combo_methods.SetForegroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOWTEXT ) )
 		self.m_combo_methods.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_WINDOW ) )
 		self.m_combo_methods.SetToolTip( u"選擇服務" )
 
-		bSizerMethods.Add( self.m_combo_methods, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_combo_methods, wx.GBPosition( 4, 1 ), wx.GBSpan( 1, 5 ), wx.ALL|wx.EXPAND, 5 )
 
-		self.m_btn_start = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_start = wx.Button( self.m_panel4, wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_start.SetLabelMarkup( u"執行請求" )
+		self.m_btn_start.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_start.SetToolTip( u"執行請求[m_btn_start]" )
 		self.m_btn_start.SetHelpText( u"m_btn_start" )
 
-		bSizerMethods.Add( self.m_btn_start, 0, wx.ALIGN_CENTER_VERTICAL, 5 )
+		gb_sizer_main.Add( self.m_btn_start, wx.GBPosition( 4, 6 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 5 )
 
-		self.m_btn_clear = wx.Button( sbSizerTop.GetStaticBox(), wx.ID_ANY, u"清空服務", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_clear = wx.Button( self.m_panel4, wx.ID_ANY, u"清空服務", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_clear.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_clear.SetToolTip( u"清空[m_btn_clear]" )
 
-		bSizerMethods.Add( self.m_btn_clear, 0, wx.ALL, 5 )
+		gb_sizer_main.Add( self.m_btn_clear, wx.GBPosition( 4, 10 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND|wx.RIGHT, 5 )
 
 
-		sbSizerTop.Add( bSizerMethods, 1, wx.EXPAND, 5 )
+		gb_sizer_main.AddGrowableCol( 1 )
+		gb_sizer_main.AddGrowableRow( 4 )
 
+		self.m_panel4.SetSizer( gb_sizer_main )
+		self.m_panel4.Layout()
+		gb_sizer_main.Fit( self.m_panel4 )
+		self.m_panel5 = wx.Panel( self.m_splitter4, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
+		bSizer9 = wx.BoxSizer( wx.VERTICAL )
 
-		bSizerMain.Add( sbSizerTop, 0, wx.ALL|wx.EXPAND, 5 )
-
-		self.m_splitter_method = wx.SplitterWindow( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.SP_3D )
+		self.m_splitter_method = wx.SplitterWindow( self.m_panel5, wx.ID_ANY, wx.Point( -1,-1 ), wx.DefaultSize, 0 )
 		self.m_splitter_method.Bind( wx.EVT_IDLE, self.m_splitter_methodOnIdle )
-		self.m_splitter_method.SetMinimumPaneSize( 50 )
+		self.m_splitter_method.SetMinimumPaneSize( 100 )
 
 		self.m_panel_left = wx.Panel( self.m_splitter_method, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
 		sbSizerLeft = wx.StaticBoxSizer( wx.StaticBox( self.m_panel_left, wx.ID_ANY, u"請求參數（多個用#~#隔開）" ), wx.VERTICAL )
@@ -190,13 +201,23 @@ class MainFrame ( wx.Frame ):
 		self.m_panel_right.SetSizer( sbSizerRight )
 		self.m_panel_right.Layout()
 		sbSizerRight.Fit( self.m_panel_right )
-		self.m_splitter_method.SplitVertically( self.m_panel_left, self.m_panel_right, 324 )
-		bSizerMain.Add( self.m_splitter_method, 1, wx.EXPAND|wx.RESERVE_SPACE_EVEN_IF_HIDDEN, 5 )
+		self.m_splitter_method.SplitVertically( self.m_panel_left, self.m_panel_right, 350 )
+		bSizer9.Add( self.m_splitter_method, 1, wx.ALL|wx.EXPAND, 5 )
 
 
-		self.SetSizer( bSizerMain )
+		self.m_panel5.SetSizer( bSizer9 )
+		self.m_panel5.Layout()
+		bSizer9.Fit( self.m_panel5 )
+		self.m_splitter4.SplitHorizontally( self.m_panel4, self.m_panel5, 150 )
+		sbSizerTop.Add( self.m_splitter4, 1, wx.EXPAND, 5 )
+
+
+		gSizer3.Add( sbSizerTop, 0, wx.ALL|wx.EXPAND, 5 )
+
+
+		self.SetSizer( gSizer3 )
 		self.Layout()
-		self.m_status = self.CreateStatusBar( 1, wx.STB_SIZEGRIP, wx.ID_ANY )
+		self.m_status = self.CreateStatusBar( 2, wx.STB_SHOW_TIPS|wx.STB_SIZEGRIP, wx.ID_ANY )
 		self.m_status.SetToolTip( u"請選擇網址再選擇服務方法" )
 		self.m_status.SetHelpText( u"請選擇網址再選擇服務方法" )
 
@@ -292,8 +313,12 @@ class MainFrame ( wx.Frame ):
 
 
 
+	def m_splitter4OnIdle( self, event ):
+		self.m_splitter4.SetSashPosition( 150 )
+		self.m_splitter4.Unbind( wx.EVT_IDLE )
+
 	def m_splitter_methodOnIdle( self, event ):
-		self.m_splitter_method.SetSashPosition( 324 )
+		self.m_splitter_method.SetSashPosition( 350 )
 		self.m_splitter_method.Unbind( wx.EVT_IDLE )
 
 
