@@ -88,6 +88,8 @@ class Main(frame.MainFrame):
         self.url_item = 0
         # 目前連線器物件
         self.connect = None
+        # 配置timeout
+        self.m_spin_ctrl_timeout.SetValue(self.app_config.get_app_timeout())
         # 若配置名稱空白則預設
         self.m_text_ctrl_name_placeholder = u"請輸入配置名稱，最多100字元"
         print(self.app_config.get_app_connection_path())

@@ -17,6 +17,9 @@ class WebServiceConfig:
         self.app_name = self.app_config['app']['name']
         self.app_version = self.app_config['app']['version']
         self.app_copyright = self.app_config['app']['copyright']
+        self.app_timeout = self.app_config['app']['timeout']
+        # IMG 配置
+        self.app_img_path = self.app_config['app']['img']
 
         # LOG 配置
         self.app_log_path = self.app_config['app']['log']['path']
@@ -27,9 +30,6 @@ class WebServiceConfig:
         self.app_connection_path = self.app_config['app']['connection']['path']
         self.app_connection_profile = self.app_config['app']['connection']['profile']
 
-        # IMG 配置
-        self.app_img_path = self.app_config['app']['img']
-
     def get_app_name(self):
         return self.app_name
 
@@ -38,6 +38,9 @@ class WebServiceConfig:
 
     def get_app_copyright(self):
         return self.app_copyright
+
+    def get_app_timeout(self):
+        return self.app_timeout
 
     def get_app_log_path(self):
         return self.app_log_path
