@@ -1750,7 +1750,7 @@
         <property name="permission">protected</property>
         <property name="pos"></property>
         <property name="size"></property>
-        <property name="style">wxSTB_SHOW_TIPS|wxSTB_SIZEGRIP</property>
+        <property name="style">wxSTB_SIZEGRIP</property>
         <property name="subclass">; ; forward_declare</property>
         <property name="tooltip">請選擇網址再選擇服務方法</property>
         <property name="window_extra_style"></property>

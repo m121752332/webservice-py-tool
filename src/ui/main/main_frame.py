@@ -217,7 +217,7 @@ class MainFrame ( wx.Frame ):
 
 		self.SetSizer( gSizer3 )
 		self.Layout()
-		self.m_status = self.CreateStatusBar( 2, wx.STB_SHOW_TIPS|wx.STB_SIZEGRIP, wx.ID_ANY )
+		self.m_status = self.CreateStatusBar( 2, wx.STB_SIZEGRIP, wx.ID_ANY )
 		self.m_status.SetToolTip( u"請選擇網址再選擇服務方法" )
 		self.m_status.SetHelpText( u"請選擇網址再選擇服務方法" )
 

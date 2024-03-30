@@ -331,8 +331,11 @@ class Main(frame.MainFrame):
 
             self.url = self.m_combo_urls.GetValue()
             logger.info("Use:{} get methods", self.url)
+            # logger.info("Spin timeout value:{}", self.m_spin_ctrl_timeout.GetValue())
+            # logger.info("Spin timeout textvalue:{}", self.m_spin_ctrl_timeout.GetTextValue())
 
-            client = suds.client.Client(self.m_combo_urls.GetValue(), timeout=3)
+            client = suds.client.Client(self.m_combo_urls.GetValue(),
+                                        timeout=self.m_spin_ctrl_timeout.GetValue())
             # methods list loading
             methods = ws_get_methods(client)
 
