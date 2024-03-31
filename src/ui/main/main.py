@@ -6,9 +6,8 @@
 import random
 import sys
 import traceback
-
+from suds.client import Client
 from loguru import logger
-import suds
 from lxml import etree
 import xml.dom.minidom
 import wx
@@ -348,8 +347,9 @@ class Main(frame.MainFrame):
             # self.busy_box = busy_display(self)
             # with self.busy_box:
             with BusyInfo('Please wait...'):
-                client = suds.client.Client(self.m_combo_urls.GetValue(),
-                                            timeout=self.m_spin_ctrl_timeout.GetValue())
+                client = Client(self.m_combo_urls.GetValue(),
+                                timeout=self.m_spin_ctrl_timeout.GetValue())
+                print("client: ", client)
             # methods list loading
             methods = ws_get_methods(client)
 
@@ -386,7 +386,8 @@ class Main(frame.MainFrame):
             funcName = lastCallStack[2]  # 取得發生事件的函數名稱
             errMsg = f"FileName: {fn}, lineNum: {lineNum}, Fun: {funcName}, reason: {info}, trace:\n {traceback.format_exc()}"
             logger.error("檢視: {}", errMsg)
-            show_message("讀取發生異常: " + str(err))
+            show_message(f"發生異常: {str(err)}"
+                         f"\n請確認連線網段或網路檢查是否連通!!")
         finally:
             # 啟用按鈕
             self.form_button_enable()
@@ -430,7 +431,7 @@ class Main(frame.MainFrame):
             self.form_button_disable()
             data = self.m_text_ctrl_params.GetValue().replace('\n',
                                                               '').split('#~#')
-            client = suds.client.Client(url)
+            client = Client(url,timeout=self.m_spin_ctrl_timeout.GetValue())
             args = get_method_args(client, method)
             if len(args) != len(data):
                 toaster.send("WARNING", u"溫馨提示",

@@ -1,8 +1,8 @@
 altgraph==0.17.4
 colorama==0.4.6
-filelock==3.13.1
+filelock==3.13.3
 fsspec==2024.3.1
-importlib_metadata==7.0.2
+importlib_metadata==7.1.0
 isort==5.13.2
 loguru==0.7.2
 lxml~=5.1.1
@@ -13,7 +13,7 @@ packaging==24.0
 pefile==2023.2.7
 pillow==10.2.0
 pip-autoremove==0.10.0
-pipdeptree==2.16.1
+pipdeptree==2.16.2
 platformdirs==4.2.0
 pyinstaller==6.5.0
 pyinstaller-hooks-contrib==2024.3

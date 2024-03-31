@@ -4,9 +4,9 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 
 * Python 3.8.10
 * WxPython==4.2.1
-* suds_jurko==0.6
-* lxml==5.1.0
-* setuptools==57.5.0
+* suds_py3==1.4.5.0
+* lxml==5.1.1
+* setuptools==69.2.0
 
 ## 開發說明
 1. 安裝依賴：`$ pip install -r requirements.txt`
