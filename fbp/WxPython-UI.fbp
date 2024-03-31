@@ -59,7 +59,7 @@
       <property name="window_style">wxTAB_TRAVERSAL</property>
       <property name="xrc_skip_sizer">1</property>
       <event name="OnClose">OnMenuClickEventExit</event>
-      <object class="wxMenuBar" expanded="false">
+      <object class="wxMenuBar" expanded="true">
         <property name="bg"></property>
         <property name="context_help"></property>
         <property name="context_menu">1</property>
@@ -100,7 +100,7 @@
             <event name="OnMenuSelection">OnMenuClickEventExit</event>
           </object>
         </object>
-        <object class="wxMenu" expanded="false">
+        <object class="wxMenu" expanded="true">
           <property name="label">執行</property>
           <property name="name">m_run</property>
           <property name="permission">protected</property>
@@ -176,6 +176,24 @@
             <property name="shortcut">f6</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventClear</event>
+          </object>
+          <object class="separator" expanded="true">
+            <property name="name">m_separator2</property>
+            <property name="permission">none</property>
+          </object>
+          <object class="wxMenuItem" expanded="true">
+            <property name="bitmap"></property>
+            <property name="checked">0</property>
+            <property name="enabled">1</property>
+            <property name="help">畫面檢測工具</property>
+            <property name="id">ID_TOOL</property>
+            <property name="kind">wxITEM_NORMAL</property>
+            <property name="label">檢測工具</property>
+            <property name="name">m_item_inspection_tool</property>
+            <property name="permission">none</property>
+            <property name="shortcut">Ctrl+D</property>
+            <property name="unchecked_bitmap"></property>
+            <event name="OnMenuSelection">OnClickEventDebugTool</event>
           </object>
         </object>
         <object class="wxMenu" expanded="false">

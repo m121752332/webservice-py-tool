@@ -7,6 +7,8 @@
 啟動
 """
 import wx
+import wx.lib.inspection
+
 from src.ui import main
 from loguru import logger
 
@@ -15,6 +17,7 @@ if __name__ == '__main__':
     app = wx.App(False)
     frame = main.Main(None)
     frame.Show(True)
+
     try:
         app.MainLoop()
     except Exception as err:

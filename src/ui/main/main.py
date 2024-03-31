@@ -9,11 +9,11 @@ import traceback
 
 from loguru import logger
 import suds
-from suds.client import Client
 from lxml import etree
 import xml.dom.minidom
 import wx
 import wx.adv
+from wx import BusyInfo
 from wx.lib.wordwrap import wordwrap
 
 import src.ui.main.main_frame as frame
@@ -22,11 +22,10 @@ from src.config.web_service_config import WebServiceConfig
 from src.utils import pathutil
 from src.utils import fileutils
 from src.utils import uuidutil
+from src.utils import toaster
+import wx.lib.inspection
 from src.utils.balloontip import show_balloon_tip
 import wx.lib.agw.infobar as IB
-import wx.lib.agw.toasterbox as TB
-
-import src.utils.toaster as toaster
 
 
 def show_message(message):
@@ -219,7 +218,6 @@ class Main(frame.MainFrame):
 
     def get_connetions_urls(self):
         """獲取WebService方法
-
         """
         self.urls_list = []
         for data in Main.json_data.values():
@@ -336,8 +334,11 @@ class Main(frame.MainFrame):
             # logger.info("Spin timeout value:{}", self.m_spin_ctrl_timeout.GetValue())
             # logger.info("Spin timeout textvalue:{}", self.m_spin_ctrl_timeout.GetTextValue())
 
-            client = suds.client.Client(self.m_combo_urls.GetValue(),
-                                        timeout=self.m_spin_ctrl_timeout.GetValue())
+            # self.busy_box = busy_display(self)
+            # with self.busy_box:
+            with BusyInfo('Please wait...'):
+                client = suds.client.Client(self.m_combo_urls.GetValue(),
+                                            timeout=self.m_spin_ctrl_timeout.GetValue())
             # methods list loading
             methods = ws_get_methods(client)
 
@@ -356,7 +357,6 @@ class Main(frame.MainFrame):
                 )
 
             self.switch_connect_by_url()
-
             self.m_combo_methods.SetItems(methods)
             self.m_combo_methods.SetSelection(0)
 
@@ -364,7 +364,6 @@ class Main(frame.MainFrame):
             self.m_text_ctrl_params.SetValue("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
 
         except Exception as err:
-
             logger.error("讀取發生異常: {}", err)
             err_type = err.__class__.__name__  # 取得錯誤的class 名稱
             info = err.args[0]  # 取得詳細內容
@@ -374,8 +373,8 @@ class Main(frame.MainFrame):
             fn = lastCallStack[0]  # 取得發生事件的檔名
             lineNum = lastCallStack[1]  # 取得發生事件的行數
             funcName = lastCallStack[2]  # 取得發生事件的函數名稱
-            errMesg = f"FileName: {fn}, lineNum: {lineNum}, Fun: {funcName}, reason: {info}, trace:\n {traceback.format_exc()}"
-            logger.error("檢視: {}", errMesg)
+            errMsg = f"FileName: {fn}, lineNum: {lineNum}, Fun: {funcName}, reason: {info}, trace:\n {traceback.format_exc()}"
+            logger.error("檢視: {}", errMsg)
             show_message("讀取發生異常: " + str(err))
         finally:
             # 啟用按鈕
@@ -693,6 +692,19 @@ class Main(frame.MainFrame):
         self.m_text_ctrl_params.SetValue("")  # 提交參數區域
         self.m_text_ctrl_result.SetValue("")  # 回應結果區域
 
+    def OnClickEventDebugTool(self, event):
+        """
+        Handles the event when the debug tool button is clicked (or control+D).
+
+        Args:
+            event: The event object containing information about the click event.
+
+        Returns:
+            None
+        """
+        logger.info("OnClickEventDebugTool")
+        wx.lib.inspection.InspectionTool().Show()
+
     def OnMenuClickEventAbout(self, event):
         """
         處理退出選單事件
@@ -727,3 +739,43 @@ class Main(frame.MainFrame):
         if app_exit.ShowModal() == wx.ID_YES:
             self.Destroy()
         app_exit.Destroy()
+
+
+class busy_display(wx.Dialog):
+
+    def __init__(self, parent):
+        # Create the dialog box
+        wx.Dialog.__init__(self, parent, style=wx.SIMPLE_BORDER)
+        self._panel = None
+        self.setup('Please wait...')
+        self._is_active = False
+
+    def setup(self, info_text):
+        if self._panel is not None:
+            # kill the panel before recreating a new one:
+            self._panel.Destroy()
+        self._panel = wx.Panel(self, -1)
+        msg = wx.StaticText(self._panel, label=info_text, style=wx.ALIGN_CENTRE_HORIZONTAL)
+        h_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        h_sizer.Add(msg, 0, wx.CENTER)
+        main_sizer.Add((0, 0), 1, wx.EXPAND)
+        main_sizer.Add(h_sizer, 0, wx.CENTER)
+        main_sizer.Add((0, 0), 1, wx.EXPAND)
+        self._panel.SetSizer(main_sizer)
+        siz = main_sizer.ComputeFittingWindowSize(self)
+        siz.IncBy(wx.Size(80, 50))
+        self.SetSize(siz)
+
+    def activate(self, message='Please wait...'):
+        # Show the dialog in modal mode
+        if not self._is_active:
+            self.setup(message)
+            self._is_active = True
+            self.ShowModal()
+
+    def deactivate(self):
+        # End the modal dialog (from the long-running process thread)
+        if self._is_active:
+            self.EndModal(0)
+            self._is_active = False
