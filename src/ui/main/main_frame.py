@@ -17,7 +17,8 @@ ID_LOAD = 1003
 ID_RUN = 1004
 ID_CLEAR = 1005
 ID_TOOL = 1006
-ID_ABOUT = 1007
+ID_SE = 1007
+ID_ABOUT = 1008
 
 ###########################################################################
 ## Class MainFrame
@@ -39,21 +40,21 @@ class MainFrame ( wx.Frame ):
 		self.m_menubar.Append( self.m_file, u"檔案" )
 
 		self.m_run = wx.Menu()
-		self.m_item_new = wx.MenuItem( self.m_run, ID_NEW, u"新增配置"+ u"\t" + u"f1", u"新增連線配置[F1]", wx.ITEM_NORMAL )
+		self.m_item_new = wx.MenuItem( self.m_run, ID_NEW, u"新增配置"+ u"\t" + u"F1", u"新增連線配置[F1]", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_new )
 
-		self.m_item_del = wx.MenuItem( self.m_run, ID_DEL, u"刪除配置"+ u"\t" + u"f2", u"刪除連線配置[F2]", wx.ITEM_NORMAL )
+		self.m_item_del = wx.MenuItem( self.m_run, ID_DEL, u"刪除配置"+ u"\t" + u"F2", u"刪除連線配置[F2]", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_del )
 
-		self.m_item_load = wx.MenuItem( self.m_run, ID_LOAD, u"讀取操作"+ u"\t" + u"f3", u"讀取服務網址的服務[F3]", wx.ITEM_NORMAL )
+		self.m_item_load = wx.MenuItem( self.m_run, ID_LOAD, u"讀取操作"+ u"\t" + u"F3", u"讀取服務網址的服務[F3]", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_load )
 
 		self.m_run.AppendSeparator()
 
-		self.m_item_run = wx.MenuItem( self.m_run, ID_RUN, u"執行請求"+ u"\t" + u"f5", u"執行貼上的請求內容[F5]", wx.ITEM_NORMAL )
+		self.m_item_run = wx.MenuItem( self.m_run, ID_RUN, u"執行請求"+ u"\t" + u"F5", u"執行貼上的請求內容[F5]", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_run )
 
-		self.m_item_clear = wx.MenuItem( self.m_run, ID_CLEAR, u"清空服務格內容"+ u"\t" + u"f6", u"清除服務的內容，如操作服務+請求+回應[F6]", wx.ITEM_NORMAL )
+		self.m_item_clear = wx.MenuItem( self.m_run, ID_CLEAR, u"清空服務格內容"+ u"\t" + u"F6", u"清除服務的內容，如操作服務+請求+回應[F6]", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_clear )
 
 		self.m_run.AppendSeparator()
@@ -61,10 +62,13 @@ class MainFrame ( wx.Frame ):
 		self.m_item_inspection_tool = wx.MenuItem( self.m_run, ID_TOOL, u"檢測工具"+ u"\t" + u"Ctrl+D", u"畫面檢測工具", wx.ITEM_NORMAL )
 		self.m_run.Append( self.m_item_inspection_tool )
 
+		self.m_item_shortcut_editor = wx.MenuItem( self.m_run, ID_SE, u"快捷鍵配置"+ u"\t" + u"Ctrl+E", u"查看快捷鍵設置", wx.ITEM_NORMAL )
+		self.m_run.Append( self.m_item_shortcut_editor )
+
 		self.m_menubar.Append( self.m_run, u"執行" )
 
 		self.m_help = wx.Menu()
-		self.m_item_about = wx.MenuItem( self.m_help, ID_ABOUT, u"About"+ u"\t" + u"f8", u"作者資訊", wx.ITEM_NORMAL )
+		self.m_item_about = wx.MenuItem( self.m_help, ID_ABOUT, u"About"+ u"\t" + u"F8", u"作者資訊", wx.ITEM_NORMAL )
 		self.m_help.Append( self.m_item_about )
 
 		self.m_menubar.Append( self.m_help, u"幫助" )
@@ -238,6 +242,7 @@ class MainFrame ( wx.Frame ):
 		self.Bind( wx.EVT_MENU, self.OnClickEventStart, id = self.m_item_run.GetId() )
 		self.Bind( wx.EVT_MENU, self.OnClickEventClear, id = self.m_item_clear.GetId() )
 		self.Bind( wx.EVT_MENU, self.OnClickEventDebugTool, id = self.m_item_inspection_tool.GetId() )
+		self.Bind( wx.EVT_MENU, self.OnClickEventShortcutEditor, id = self.m_item_shortcut_editor.GetId() )
 		self.Bind( wx.EVT_MENU, self.OnMenuClickEventAbout, id = self.m_item_about.GetId() )
 		self.m_text_ctrl_name.Bind( wx.EVT_KILL_FOCUS, self.OnTextCtrlNameKillFocus )
 		self.m_text_ctrl_name.Bind( wx.EVT_SET_FOCUS, self.OnTextCtrlNameSetFocus )
@@ -278,6 +283,9 @@ class MainFrame ( wx.Frame ):
 		event.Skip()
 
 	def OnClickEventDebugTool( self, event ):
+		event.Skip()
+
+	def OnClickEventShortcutEditor( self, event ):
 		event.Skip()
 
 	def OnMenuClickEventAbout( self, event ):

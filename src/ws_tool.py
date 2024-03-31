@@ -7,7 +7,6 @@
 啟動
 """
 import wx
-import wx.lib.inspection
 
 from src.ui import main
 from loguru import logger

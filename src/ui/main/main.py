@@ -19,13 +19,14 @@ from wx.lib.wordwrap import wordwrap
 import src.ui.main.main_frame as frame
 from src.config.ConnectionManager import ConnectionManager
 from src.config.web_service_config import WebServiceConfig
-from src.utils import pathutil
+from src.utils import pathutil, darkmode
 from src.utils import fileutils
 from src.utils import uuidutil
 from src.utils import toaster
 import wx.lib.inspection
 from src.utils.balloontip import show_balloon_tip
 import wx.lib.agw.infobar as IB
+import wx.lib.agw.shortcuteditor as SE
 
 
 def show_message(message):
@@ -59,6 +60,15 @@ def get_method_args(client, method_str):
     return input_params.param_defs(method)
 
 
+def open_shortcut_editor(self):
+    dlg = SE.ShortcutEditor(self)
+    dlg.FromMenuBar(self)
+    if dlg.ShowModal() == wx.ID_OK:
+        # Changes accepted, send back the new shortcuts to the TLW wx.MenuBar
+        dlg.ToMenuBar(self)
+    dlg.Destroy()
+
+
 class Main(frame.MainFrame):
     # 類變數 json_data
     json_data = ""
@@ -69,9 +79,9 @@ class Main(frame.MainFrame):
         self.TotalMsgs = 1
         self._infoBar = IB.InfoBar(self)
 
-        # logger
+        # APP CONFIG OBJECT
         self.app_config = WebServiceConfig()
-
+        # logger runner
         logger.add(self.app_config.get_app_log_path() + '/run.log',
                    retention=self.app_config.get_app_log_retention())
 
@@ -81,6 +91,9 @@ class Main(frame.MainFrame):
         self.SetIcon(self.icon)
         self.Centre()
 
+        # 背景預設顏色
+        self.defaultColor = self.GetBackgroundColour()
+        # darkmode.dark_mode(self, self.defaultColor)
         # 執行狀態，初始化給False
         self.open_state = False
         # 配置url給予選擇item
@@ -139,8 +152,6 @@ class Main(frame.MainFrame):
         if self.m_text_ctrl_name.GetValue() == "":
             self.m_text_ctrl_name.SetValue(self.m_text_ctrl_name_placeholder)
             self.m_text_ctrl_name.SetForegroundColour(wx.Colour(128, 128, 128))
-
-        # wx.CallLater(2000, self.show_info)
 
     def load_json_data(self):
         # 從檔案中讀取資料
@@ -704,6 +715,19 @@ class Main(frame.MainFrame):
         """
         logger.info("OnClickEventDebugTool")
         wx.lib.inspection.InspectionTool().Show()
+
+    def OnClickEventShortcutEditor(self, event):
+        """
+        Handles the event when the shortcut editor button is clicked (or control+K).
+
+        Args:
+            event: The event object containing information about the click event.
+
+        Returns:
+            None
+        """
+        logger.info("OnClickEventShortcutEditor")
+        open_shortcut_editor(self)
 
     def OnMenuClickEventAbout(self, event):
         """

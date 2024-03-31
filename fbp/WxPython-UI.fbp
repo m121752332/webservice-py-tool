@@ -114,7 +114,7 @@
             <property name="label">新增配置</property>
             <property name="name">m_item_new</property>
             <property name="permission">none</property>
-            <property name="shortcut">f1</property>
+            <property name="shortcut">F1</property>
             <property name="unchecked_bitmap"></property>
           </object>
           <object class="wxMenuItem" expanded="false">
@@ -127,7 +127,7 @@
             <property name="label">刪除配置</property>
             <property name="name">m_item_del</property>
             <property name="permission">none</property>
-            <property name="shortcut">f2</property>
+            <property name="shortcut">F2</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventDel</event>
           </object>
@@ -141,7 +141,7 @@
             <property name="label">讀取操作</property>
             <property name="name">m_item_load</property>
             <property name="permission">none</property>
-            <property name="shortcut">f3</property>
+            <property name="shortcut">F3</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventLoad</event>
           </object>
@@ -159,7 +159,7 @@
             <property name="label">執行請求</property>
             <property name="name">m_item_run</property>
             <property name="permission">none</property>
-            <property name="shortcut">f5</property>
+            <property name="shortcut">F5</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventStart</event>
           </object>
@@ -173,7 +173,7 @@
             <property name="label">清空服務格內容</property>
             <property name="name">m_item_clear</property>
             <property name="permission">none</property>
-            <property name="shortcut">f6</property>
+            <property name="shortcut">F6</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventClear</event>
           </object>
@@ -195,8 +195,22 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventDebugTool</event>
           </object>
+          <object class="wxMenuItem" expanded="true">
+            <property name="bitmap"></property>
+            <property name="checked">0</property>
+            <property name="enabled">1</property>
+            <property name="help">查看快捷鍵設置</property>
+            <property name="id">ID_SE</property>
+            <property name="kind">wxITEM_NORMAL</property>
+            <property name="label">快捷鍵配置</property>
+            <property name="name">m_item_shortcut_editor</property>
+            <property name="permission">none</property>
+            <property name="shortcut">Ctrl+E</property>
+            <property name="unchecked_bitmap"></property>
+            <event name="OnMenuSelection">OnClickEventShortcutEditor</event>
+          </object>
         </object>
-        <object class="wxMenu" expanded="false">
+        <object class="wxMenu" expanded="true">
           <property name="label">幫助</property>
           <property name="name">m_help</property>
           <property name="permission">protected</property>
@@ -210,7 +224,7 @@
             <property name="label">About</property>
             <property name="name">m_item_about</property>
             <property name="permission">none</property>
-            <property name="shortcut">f8</property>
+            <property name="shortcut">F8</property>
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnMenuClickEventAbout</event>
           </object>
