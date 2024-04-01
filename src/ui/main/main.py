@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# @Time : 2021/09/29 10:16
+# @Time : 2024/03/31
 # @Author : Tiger
 # @File : main.py
 # @Software: vscode
@@ -431,10 +431,10 @@ class Main(frame.MainFrame):
             self.form_button_disable()
             data = self.m_text_ctrl_params.GetValue().replace('\n',
                                                               '').split('#~#')
-            client = Client(url,timeout=self.m_spin_ctrl_timeout.GetValue())
+            client = Client(url, timeout=self.m_spin_ctrl_timeout.GetValue())
             args = get_method_args(client, method)
             if len(args) != len(data):
-                toaster.send("WARNING", u"溫馨提示",
+                show_warning( u"溫馨提示",
                              u"該服務方法需要" + str(len(args)) + "個參數，而你只輸入了" +
                              str(len(data)) + "個，多參數請使用#~#隔開，並保證參數順序")
                 return

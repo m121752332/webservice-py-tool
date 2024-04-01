@@ -81,13 +81,13 @@ class MainFrame ( wx.Frame ):
 
 		self.m_splitter4 = wx.SplitterWindow( sbSizerTop.GetStaticBox(), wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.SP_3D )
 		self.m_splitter4.Bind( wx.EVT_IDLE, self.m_splitter4OnIdle )
-		self.m_splitter4.SetMinimumPaneSize( 150 )
+		self.m_splitter4.SetMinimumPaneSize( 160 )
 
 		self.m_panel4 = wx.Panel( self.m_splitter4, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.TAB_TRAVERSAL )
 		gb_sizer_main = wx.GridBagSizer( 0, 0 )
 		gb_sizer_main.SetFlexibleDirection( wx.BOTH )
 		gb_sizer_main.SetNonFlexibleGrowMode( wx.FLEX_GROWMODE_SPECIFIED )
-		gb_sizer_main.SetEmptyCellSize( wx.Size( 5,5 ) )
+		gb_sizer_main.SetEmptyCellSize( wx.Size( 0,0 ) )
 
 		self.m_static_text_name = wx.StaticText( self.m_panel4, wx.ID_ANY, u"配  置  名：", wx.Point( -1,-1 ), wx.DefaultSize, 0 )
 		self.m_static_text_name.Wrap( -1 )
@@ -163,23 +163,23 @@ class MainFrame ( wx.Frame ):
 
 		gb_sizer_main.Add( self.m_combo_methods, wx.GBPosition( 4, 1 ), wx.GBSpan( 1, 5 ), wx.ALL|wx.EXPAND, 5 )
 
-		self.m_btn_start = wx.Button( self.m_panel4, wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_btn_start = wx.Button( self.m_panel4, wx.ID_ANY, u"執行請求", wx.DefaultPosition, wx.Size( -1,-1 ), 0 )
 		self.m_btn_start.SetLabelMarkup( u"執行請求" )
 		self.m_btn_start.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_start.SetToolTip( u"執行請求[m_btn_start]" )
 		self.m_btn_start.SetHelpText( u"m_btn_start" )
 
-		gb_sizer_main.Add( self.m_btn_start, wx.GBPosition( 4, 6 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 5 )
+		gb_sizer_main.Add( self.m_btn_start, wx.GBPosition( 4, 6 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND, 2 )
 
 		self.m_btn_clear = wx.Button( self.m_panel4, wx.ID_ANY, u"清空服務", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_btn_clear.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_BTNFACE ) )
 		self.m_btn_clear.SetToolTip( u"清空[m_btn_clear]" )
 
-		gb_sizer_main.Add( self.m_btn_clear, wx.GBPosition( 4, 10 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND|wx.RIGHT, 5 )
+		gb_sizer_main.Add( self.m_btn_clear, wx.GBPosition( 4, 10 ), wx.GBSpan( 1, 1 ), wx.ALL|wx.EXPAND|wx.RIGHT, 2 )
 
 
 		gb_sizer_main.AddGrowableCol( 1 )
-		gb_sizer_main.AddGrowableRow( 4 )
+		gb_sizer_main.AddGrowableRow( 2 )
 
 		self.m_panel4.SetSizer( gb_sizer_main )
 		self.m_panel4.Layout()
@@ -218,7 +218,7 @@ class MainFrame ( wx.Frame ):
 		self.m_panel5.SetSizer( bSizer9 )
 		self.m_panel5.Layout()
 		bSizer9.Fit( self.m_panel5 )
-		self.m_splitter4.SplitHorizontally( self.m_panel4, self.m_panel5, 150 )
+		self.m_splitter4.SplitHorizontally( self.m_panel4, self.m_panel5, 160 )
 		sbSizerTop.Add( self.m_splitter4, 1, wx.EXPAND, 5 )
 
 
@@ -332,7 +332,7 @@ class MainFrame ( wx.Frame ):
 
 
 	def m_splitter4OnIdle( self, event ):
-		self.m_splitter4.SetSashPosition( 150 )
+		self.m_splitter4.SetSashPosition( 160 )
 		self.m_splitter4.Unbind( wx.EVT_IDLE )
 
 	def m_splitter_methodOnIdle( self, event ):
