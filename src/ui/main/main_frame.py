@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ###########################################################################
-## Python code generated with wxFormBuilder (version 4.1.0-0-g733bf3d)
+## Python code generated with wxFormBuilder (version 4.2.1-0-g80c4cb6)
 ## http://www.wxformbuilder.org/
 ##
 ## PLEASE DO *NOT* EDIT THIS FILE!
@@ -10,15 +10,15 @@
 import wx
 import wx.xrc
 
-ID_ESC = 1000
-ID_NEW = 1001
-ID_DEL = 1002
-ID_LOAD = 1003
-ID_RUN = 1004
-ID_CLEAR = 1005
-ID_TOOL = 1006
-ID_SE = 1007
-ID_ABOUT = 1008
+ID_ESC = 6000
+ID_NEW = 6001
+ID_DEL = 6002
+ID_LOAD = 6003
+ID_RUN = 6004
+ID_CLEAR = 6005
+ID_TOOL = 6006
+ID_SE = 6007
+ID_ABOUT = 6008
 
 ###########################################################################
 ## Class MainFrame
@@ -138,12 +138,12 @@ class MainFrame ( wx.Frame ):
 
 		gb_sizer_main.Add( self.m_static_text_help, wx.GBPosition( 2, 1 ), wx.GBSpan( 1, 1 ), wx.ALIGN_BOTTOM|wx.EXPAND, 1 )
 
-		self.m_static_text = wx.StaticText( self.m_panel4, wx.ID_ANY, u"逾時秒數(3~10秒)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_static_text = wx.StaticText( self.m_panel4, wx.ID_ANY, u"逾時秒數(5~30秒)", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_static_text.Wrap( -1 )
 
 		gb_sizer_main.Add( self.m_static_text, wx.GBPosition( 3, 8 ), wx.GBSpan( 1, 2 ), wx.ALIGN_RIGHT|wx.ALL, 5 )
 
-		self.m_spin_ctrl_timeout = wx.SpinCtrl( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.Point( -1,-1 ), wx.Size( 80,-1 ), wx.ALIGN_RIGHT|wx.SP_ARROW_KEYS, 3, 10, 3 )
+		self.m_spin_ctrl_timeout = wx.SpinCtrl( self.m_panel4, wx.ID_ANY, wx.EmptyString, wx.Point( -1,-1 ), wx.Size( 80,-1 ), wx.ALIGN_RIGHT|wx.SP_ARROW_KEYS, 5, 30, 5 )
 		self.m_spin_ctrl_timeout.SetBackgroundColour( wx.SystemSettings.GetColour( wx.SYS_COLOUR_INFOBK ) )
 		self.m_spin_ctrl_timeout.SetToolTip( u"逾時時間設置" )
 		self.m_spin_ctrl_timeout.SetHelpText( u"逾時時間設置" )
