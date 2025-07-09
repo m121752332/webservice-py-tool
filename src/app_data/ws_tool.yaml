@@ -8,13 +8,18 @@ app:
   # APP icon location
   img: "img/favicon.ico"
   # APP loading timeout value (seconds)
-  timeout: 3
+  timeout: 10
 
-  # Log path of the application
+  # Log Setting
   log:
+    # Log path of the application
     path: "app_data/logs"
+    # Log level of the application
+    # trace | debug | info | success |warning | error | critical | exception
     level: info
+    # Log 紀錄循環週期
     retention: "10 days"
+
   # 服務配置檔位置
   connection:
     path: "app_data"
