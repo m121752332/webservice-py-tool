@@ -24,6 +24,34 @@ def show_message(message):
     wx.MessageDialog(None, message, u"傳遞檢查", wx.OK).ShowModal()
 
 
+def _center_on_parent(tb: TB.ToasterBox, parent_window: wx.Window | None, popup_size: tuple[int, int]) -> bool:
+    if not parent_window:
+        return False
+    try:
+        rect = parent_window.GetScreenRect()
+        toast_w, toast_h = popup_size
+        pos_x = rect.x + (rect.width - toast_w) / 2
+        pos_y = rect.y + (rect.height - toast_h) / 2
+        tb.SetPopupPosition((int(round(pos_x)), int(round(pos_y))))
+        return True
+    except Exception as center_err:
+        logger.warning("CenterOnParent fallback triggered: {}", center_err)
+        return False
+
+
+def _center_on_screen(tb: TB.ToasterBox, popup_size: tuple[int, int]) -> bool:
+    try:
+        screen_size = wx.GetDisplaySize()
+        toast_w, toast_h = popup_size
+        pos_x = (screen_size.GetWidth() - toast_w) / 2
+        pos_y = (screen_size.GetHeight() - toast_h) / 2
+        tb.SetPopupPosition((int(round(pos_x)), int(round(pos_y))))
+        return True
+    except Exception as screen_err:
+        logger.warning("CenterOnScreen fallback triggered: {}", screen_err)
+        return False
+
+
 def send(enum_msg, title, message):
     """
     Function to send a message with a specified title and content.
@@ -37,20 +65,25 @@ def send(enum_msg, title, message):
         wx_icon = wx.ArtProvider.GetBitmap(wx.ART_INFORMATION,
                                            wx.ART_OTHER, (48, 48))
         (x, y) = wx.GetMousePosition()
-        tb = TB.ToasterBox(wx.GetApp().GetTopWindow(),
+        parent_window = wx.GetApp().GetTopWindow()
+        popup_size = (400, 80)
+        tb = TB.ToasterBox(parent_window,
                            TB.TB_COMPLEX,
                            TB.TB_DEFAULT_STYLE,
                            TB.TB_ONTIME)
-        tb.SetPopupSize((400, 80))
+        tb.SetPopupSize(popup_size)
         tb.SetPopupPauseTime(3000)
         tb.SetPopupScrollSpeed(8)
+        if not _center_on_parent(tb, parent_window, popup_size):
+            if not _center_on_screen(tb, popup_size):
+                tb.SetPopupPosition((int(x) - 100, int(y) + 10))
         # tb.SetPopupPositionByInt(3)
         # 配置彈出位置
         # tb.SetPopupPosition(wx.Position(x - 100, y + 10))
         # 在主框體中間
-        tb.CenterOnParent()
+        # tb.CenterOnParent()
         # 在螢幕正中間
-        tb.CenterOnScreen()
+        # tb.CenterOnScreen()
 
         # wx controls
         tb_panel = tb.GetToasterBoxWindow()

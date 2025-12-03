@@ -6,20 +6,15 @@ app:
   # Description of the application
   copyright: "Copyright 2024 GameStudio. All rights reserved."
   # APP icon location
-  img: "img/favicon.ico"
+  img: "assets/app_icon.ico"
   # APP loading timeout value (seconds)
-  timeout: 10
+  timeout: 120
 
-  # Log Setting
+  # Log path of the application
   log:
-    # Log path of the application
     path: "app_data/logs"
-    # Log level of the application
-    # trace | debug | info | success |warning | error | critical | exception
     level: info
-    # Log 紀錄循環週期
     retention: "10 days"
-
   # 服務配置檔位置
   connection:
     path: "app_data"

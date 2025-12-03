@@ -1,12 +1,12 @@
-## 專案簡介
+# 專案簡介
 
 WebService服務部署到了服務器，但是只能本地訪問，下載soapui有點太大了，找其他的測試工具又沒有合適的，就自己寫了個比較簡單的小工具！
 
 * Python 3.11.8
 * WxPython==4.2.1
 * suds_py3==1.4.5.0
-* lxml==5.2.0
-* setuptools==69.2.0
+* lxml==6.0.2
+* setuptools==80.9.0
 
 ## 開發說明
 1. 安裝依賴：`$ pip install -r requirements.txt`
@@ -24,7 +24,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 `pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -F -w -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
 
 ## 版本產生
-切到 src/config 底下輸入  
+切到 src/config 底下輸入
 `python grab_version.py C:\Windows\System32\WWAHost.exe`  
 系統自動產生 file_version_info.txt 用於包裝到pyinstaller的版本檔案使用
 

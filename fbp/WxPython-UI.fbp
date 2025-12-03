@@ -61,7 +61,7 @@
       <property name="window_style">wxTAB_TRAVERSAL</property>
       <property name="xrc_skip_sizer">1</property>
       <event name="OnClose">OnMenuClickEventExit</event>
-      <object class="wxMenuBar" expanded="true">
+      <object class="wxMenuBar" expanded="false">
         <property name="bg"></property>
         <property name="context_help"></property>
         <property name="context_menu">1</property>
@@ -102,7 +102,7 @@
             <event name="OnMenuSelection">OnMenuClickEventExit</event>
           </object>
         </object>
-        <object class="wxMenu" expanded="true">
+        <object class="wxMenu" expanded="false">
           <property name="label">執行</property>
           <property name="name">m_run</property>
           <property name="permission">protected</property>
@@ -179,11 +179,11 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventClear</event>
           </object>
-          <object class="separator" expanded="true">
+          <object class="separator" expanded="false">
             <property name="name">m_separator2</property>
             <property name="permission">none</property>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -197,7 +197,7 @@
             <property name="unchecked_bitmap"></property>
             <event name="OnMenuSelection">OnClickEventDebugTool</event>
           </object>
-          <object class="wxMenuItem" expanded="true">
+          <object class="wxMenuItem" expanded="false">
             <property name="bitmap"></property>
             <property name="checked">0</property>
             <property name="enabled">1</property>
@@ -212,7 +212,7 @@
             <event name="OnMenuSelection">OnClickEventShortcutEditor</event>
           </object>
         </object>
-        <object class="wxMenu" expanded="true">
+        <object class="wxMenu" expanded="false">
           <property name="label">幫助</property>
           <property name="name">m_help</property>
           <property name="permission">protected</property>
@@ -232,7 +232,7 @@
           </object>
         </object>
       </object>
-      <object class="wxGridSizer" expanded="true">
+      <object class="wxGridSizer" expanded="false">
         <property name="cols">1</property>
         <property name="hgap">0</property>
         <property name="minimum_size"></property>
@@ -240,11 +240,11 @@
         <property name="permission">none</property>
         <property name="rows">1</property>
         <property name="vgap">0</property>
-        <object class="sizeritem" expanded="true">
+        <object class="sizeritem" expanded="false">
           <property name="border">5</property>
           <property name="flag">wxALL|wxEXPAND</property>
           <property name="proportion">0</property>
-          <object class="wxStaticBoxSizer" expanded="true">
+          <object class="wxStaticBoxSizer" expanded="false">
             <property name="id">wxID_ANY</property>
             <property name="label"></property>
             <property name="minimum_size"></property>
@@ -252,11 +252,11 @@
             <property name="orient">wxHORIZONTAL</property>
             <property name="parent">1</property>
             <property name="permission">none</property>
-            <object class="sizeritem" expanded="true">
+            <object class="sizeritem" expanded="false">
               <property name="border">5</property>
               <property name="flag">wxEXPAND</property>
               <property name="proportion">1</property>
-              <object class="wxSplitterWindow" expanded="true">
+              <object class="wxSplitterWindow" expanded="false">
                 <property name="BottomDockable">1</property>
                 <property name="LeftDockable">1</property>
                 <property name="RightDockable">1</property>
@@ -314,8 +314,8 @@
                 <property name="window_extra_style"></property>
                 <property name="window_name"></property>
                 <property name="window_style"></property>
-                <object class="splitteritem" expanded="true">
-                  <object class="wxPanel" expanded="true">
+                <object class="splitteritem" expanded="false">
+                  <object class="wxPanel" expanded="false">
                     <property name="BottomDockable">1</property>
                     <property name="LeftDockable">1</property>
                     <property name="RightDockable">1</property>
@@ -1054,7 +1054,7 @@
                           <property name="hidden">0</property>
                           <property name="id">wxID_ANY</property>
                           <property name="initial">5</property>
-                          <property name="max">30</property>
+                          <property name="max">120</property>
                           <property name="max_size"></property>
                           <property name="maximize_button">0</property>
                           <property name="maximum_size"></property>
@@ -1767,7 +1767,7 @@
           </object>
         </object>
       </object>
-      <object class="wxStatusBar" expanded="true">
+      <object class="wxStatusBar" expanded="false">
         <property name="bg"></property>
         <property name="context_help">請選擇網址再選擇服務方法</property>
         <property name="context_menu">1</property>

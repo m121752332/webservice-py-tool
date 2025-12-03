@@ -43,7 +43,26 @@ def resource_path(relative_path):
         else:
             # logger.info("exepath: EXE_PATH = {}", exepath)
             globalvalues.EXE_PATH = exepath
-    return os.path.join(exepath, relative_path)
+
+    # Build candidate paths and normalize them
+    candidates = []
+    primary = os.path.normpath(os.path.join(exepath, relative_path))
+    candidates.append(primary)
+
+    # If running with CWD set to src, try resolving from parent (project root)
+    candidates.append(os.path.normpath(os.path.join(exepath, '..', relative_path)))
+    # Try resolving from a 'src' subfolder (when CWD is project root but resources are under src)
+    candidates.append(os.path.normpath(os.path.join(exepath, 'src', relative_path)))
+    # Try resolving relative to the script directory (this file's parent folders)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.normpath(os.path.join(script_dir, '..', relative_path)))
+
+    # Return the first candidate that exists, otherwise return the primary normalized path
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+
+    return primary
 
 
 def resource_abspath(relative_path):
@@ -55,4 +74,16 @@ def resource_abspath(relative_path):
     else:
         # logger.info("exe path: EXE_PATH = {}", exe_path)
         globalvalues.EXE_PATH = exe_path
-    return os.path.join(exe_path, relative_path)
+
+    # Similar fallback logic as resource_path
+    primary = os.path.normpath(os.path.join(exe_path, relative_path))
+    if os.path.exists(primary):
+        return primary
+    alt = os.path.normpath(os.path.join(exe_path, '..', relative_path))
+    if os.path.exists(alt):
+        return alt
+    alt2 = os.path.normpath(os.path.join(exe_path, 'src', relative_path))
+    if os.path.exists(alt2):
+        return alt2
+    # fallback to primary even if it doesn't exist
+    return primary
