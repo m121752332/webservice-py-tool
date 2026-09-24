@@ -38,7 +38,8 @@ src/
 │  └─ soap_service.py         SoapService、CallResult、ParamCountMismatch、format_xml
 ├─ ui/
 │  ├─ theme.py                色票、QSS 樣板、ThemeManager
-│  ├─ main_window.py          主視窗（工作區、通知橫幅、狀態列、快捷鍵）
+│  ├─ main_window.py          主視窗（工作區、狀態列、快捷鍵）
+│  ├─ notification_bar.py     通知橫幅
 │  ├─ connection_list.py      左側連線清單（搜尋、新增、刪除、選取）
 │  ├─ xml_editor.py           XmlEditor + XmlHighlighter
 │  └─ workers.py              背景工作（QThreadPool + 訊號）
@@ -83,6 +84,7 @@ tests/                        pytest 測試
 - 搜尋框依名稱或網址即時篩選（不分大小寫）
 - 「+ 新增連線」建立空白連線並選取，焦點移到配置名欄位
 - 刪除：右鍵選單「刪除」或 Del 鍵，需確認
+- 清單永遠至少一筆：啟動時沒有任何連線、或刪除最後一筆時，自動建立一筆空白連線並選取（沿用舊版行為）
 - 底部「主題」按鈕彈出選單：跟隨系統 / 淺色 / 深色（勾選目前模式）
 - 底部「關於」按鈕顯示 App 名稱、版本、版權、GitHub 連結、作者（內容取自 `ws_tool.yaml`）
 
@@ -148,11 +150,12 @@ tests/                        pytest 測試
 |---|---|---|---|
 | `bg` | #F3F3F3 | #202020 | 視窗底色、側欄 |
 | `surface` | #FFFFFF | #2B2B2B | 卡片、輸入框、編輯器 |
-| `surface_hover` | #F5F5F5 | #323232 | 滑過狀態、清單選取底色 |
+| `surface_hover` | #EAEAEA | #383838 | 滑過狀態、清單選取底色（需與 `bg` 有明顯差異） |
 | `border` | #E0E0E0 | #3A3A3A | 邊框、分隔線 |
 | `text` | #1B1B1B | #FFFFFF | 主要文字 |
 | `text_muted` | #616161 | #A0A0A0 | 次要文字、佔位文字 |
 | `accent` | #0067C0 | #4CC2FF | 主要按鈕、選取指示、焦點框 |
+| `accent_hover` | #1975C5 | #47B1E8 | 主要按鈕滑過 |
 | `accent_text` | #FFFFFF | #000000 | 主要按鈕上的文字 |
 | `success` | #0F7B0F | #6CCB5F | 成功狀態 |
 | `warning` | #9D5D00 | #FCE100 | 警告 |
@@ -193,7 +196,7 @@ class Connection:
 
 class ConnectionStore:
     def __init__(self, path: Path): ...
-    def list(self) -> list[Connection]: ...
+    def all(self) -> list[Connection]: ...           # 回傳副本；不取名 list，避免遮蔽 list[...] 型別註解
     def get(self, uuid: str) -> Connection | None: ...
     def add(self) -> Connection: ...                 # name="", url="", methods=[]
     def remove(self, uuid: str) -> None: ...
@@ -232,7 +235,7 @@ class SoapService:
     def call(self, url: str, method: str, raw_params: str, timeout: int) -> CallResult: ...
 ```
 
-- Client 以網址快取；`load_methods` 一律重建。`call` 若無快取則建立；若快取的 client 逾時設定不同，更新其 `timeout` 選項
+- Client 以網址快取；`load_methods` 一律重建（`cache=None`，不用 suds 預設一天的磁碟快取）。`call` 若無快取則建立；有快取則以 `set_options(timeout=...)` 更新逾時。取消後的舊請求可能仍在使用同一個 client，但 suds 1.2 的 `clone()` 會 RecursionError，因此直接共用
 - 參數對應沿用舊邏輯：依方法定義的參數順序，將切分結果依序對應
 - 回應不是字串時以 `str()` 轉換；`format_xml` 失敗時 `text` 使用原文
 - `client_factory` 可注入，方便測試
@@ -261,7 +264,7 @@ pytest，全部離線執行：
 
 - `tests/test_connection_store.py`：新增、刪除、改名、改網址、存方法、重新載入後資料一致、檔案不存在、JSON 損毀的備份、讀取現有 `connections.profile` 格式
 - `tests/test_soap_service.py`：`split_params`、`format_xml`（合法/不合法）、以假 client 驗證參數對應與 `ParamCountMismatch`、client 快取、`load_methods` 使用本機 WSDL fixture（`tests/fixtures/sample.wsdl`）
-- `tests/test_ui_smoke.py`：`QT_QPA_PLATFORM=offscreen` 下建立主視窗、切換三種主題、切換連線，不拋出例外
+- UI 元件測試（`QT_QPA_PLATFORM=offscreen`）：`test_theme.py`、`test_xml_editor.py`、`test_workers.py`、`test_notification_bar.py`、`test_connection_list.py`、`test_main_window.py`（以假的 SoapService 驗證讀取、執行、取消、刪除、主題切換等流程）
 
 ## 8. 打包與文件
 
