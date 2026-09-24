@@ -2,14 +2,14 @@
 
 WebService服務部署到了服務器，但是只能本地訪問，下載soapui有點太大了，找其他的測試工具又沒有合適的，就自己寫了個比較簡單的小工具！
 
-* Python 3.11.8
-* WxPython==4.2.1
-* suds_py3==1.4.5.0
-* lxml==6.0.2
-* setuptools==80.9.0
+* Python 3.14
+* wxPython==4.3.1
+* suds==1.2.0
+* lxml==6.1.3
+* PyInstaller==6.22.3
 
 ## 開發說明
-1. 安裝依賴：`$ pip install -r requirements.txt`
+1. 安裝依賴：`$ uv sync`（或 `$ pip install -r requirements.txt`，此檔由 `uv export --format requirements-txt --no-hashes --no-emit-project -o requirements.txt` 產生）
 2. 使用vscode開發，打開src/ws-tool.py文件，點擊運行→啟動調試，或者F5啟動程序
 3. 其他工具開發，執行`$ python ws-tool.py`運行程序
 4. 打包exe時候直接運行bin/package.bat即可，執行完會生成dist目錄，里面是打包好的運行文件
