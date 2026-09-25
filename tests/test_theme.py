@@ -31,12 +31,14 @@ def test_defaults_to_system_mode(qapp, settings):
     assert ThemeManager(qapp, settings).mode is ThemeMode.SYSTEM
 
 
-def test_system_mode_with_unknown_scheme_uses_light(qapp, settings):
+def test_system_mode_with_unknown_scheme_uses_light(qapp, settings, monkeypatch):
     # offscreen 平台回報 ColorScheme.Unknown，應視為淺色
+    styles = []
+    monkeypatch.setattr(qapp, "setStyle", styles.append)
     manager = ThemeManager(qapp, settings)
     manager.apply()
     assert manager.palette == LIGHT
-    assert qapp.style().name().lower() == "fusion"
+    assert styles == ["Fusion"]
 
 
 def test_set_mode_applies_persists_and_emits(qapp, settings):
