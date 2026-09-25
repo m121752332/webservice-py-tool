@@ -13,3 +13,4 @@ venv
 __pycache__
 dist
 build
+/src/app_data/connections.profile
