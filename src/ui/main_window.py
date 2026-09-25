@@ -1,0 +1,427 @@
+# -*- coding: utf-8 -*-
+"""
+主視窗：左側連線清單 + 右側工作區
+"""
+from dataclasses import dataclass
+
+from PySide6.QtCore import Qt, Slot
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtWidgets import (
+    QComboBox,
+    QCompleter,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
+
+from src.core.connection_store import Connection, ConnectionStore
+from src.core.soap_service import format_xml
+from src.ui.connection_list import UNNAMED, ConnectionList
+from src.ui.notification_bar import NotificationBar
+from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
+from src.ui.xml_editor import XmlEditor
+
+XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
+TIMEOUT_MIN = 5
+TIMEOUT_MAX = 120
+LOAD_LABEL = "讀取 WSDL"
+RUN_LABEL = "▶ 執行"
+CANCEL_LABEL = "取消"
+THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
+
+
+@dataclass(frozen=True)
+class AboutInfo:
+    name: str
+    version: str
+    copyright: str
+    website: str
+
+
+def format_size(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.1f} KB"
+    return f"{size / 1024 / 1024:.1f} MB"
+
+
+def _button(text: str, variant: str | None = None, tooltip: str = "") -> QPushButton:
+    button = QPushButton(text)
+    if variant:
+        button.setProperty("variant", variant)
+    if tooltip:
+        button.setToolTip(tooltip)
+    return button
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, store: ConnectionStore, service, theme: ThemeManager, about: AboutInfo,
+                 default_timeout: int, parent=None):
+        super().__init__(parent)
+        self._store = store
+        self._service = service
+        self._theme = theme
+        self._about = about
+        self._current_uuid: str | None = None
+        self._methods: list[str] = []
+        self._pending = None  # 進行中工作的 tag：(kind, seq, uuid)
+
+        self.setWindowTitle(about.name)
+        self.resize(1100, 700)
+        self.setMinimumSize(900, 560)
+        self._build_ui(default_timeout)
+        self._build_shortcuts()
+        self._connect_signals()
+        self._theme.themeChanged.connect(self._on_theme_changed)
+        self._reset_status()
+        self._load_initial_connections()
+
+    # ---------- 版面 ----------
+
+    def _build_ui(self, default_timeout: int) -> None:
+        central = QWidget()
+        root = QHBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_sidebar())
+        root.addWidget(self._build_workspace(default_timeout), 1)
+        self.setCentralWidget(central)
+
+        self.status_state = QLabel()
+        self.status_state.setObjectName("StatusState")
+        self.status_detail = QLabel()
+        self.status_detail.setObjectName("StatusDetail")
+        self.statusBar().addWidget(self.status_state)
+        self.statusBar().addWidget(self.status_detail, 1)
+
+    def _build_sidebar(self) -> QFrame:
+        sidebar = QFrame()
+        sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(260)
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(12, 16, 12, 12)
+        layout.setSpacing(8)
+
+        title = QLabel(self._about.name)
+        title.setObjectName("AppTitle")
+        title.setWordWrap(True)
+        self.connection_list = ConnectionList()
+
+        self.theme_button = _button("◐ 主題", "subtle", "切換淺色 / 深色主題")
+        self.theme_button.setMenu(self._build_theme_menu())
+        self.about_button = _button("ⓘ 關於", "subtle")
+        footer = QHBoxLayout()
+        footer.setSpacing(4)
+        footer.addWidget(self.theme_button)
+        footer.addWidget(self.about_button)
+        footer.addStretch(1)
+
+        layout.addWidget(title)
+        layout.addWidget(self.connection_list, 1)
+        layout.addLayout(footer)
+        return sidebar
+
+    def _build_theme_menu(self) -> QMenu:
+        menu = QMenu(self)
+        group = QActionGroup(menu)
+        group.setExclusive(True)
+        self.theme_actions: dict[ThemeMode, QAction] = {}
+        for mode, label in THEME_LABELS.items():
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            action.setChecked(mode is self._theme.mode)
+            action.triggered.connect(lambda _checked=False, m=mode: self._theme.set_mode(m))
+            group.addAction(action)
+            menu.addAction(action)
+            self.theme_actions[mode] = action
+        return menu
+
+    def _build_workspace(self, default_timeout: int) -> QWidget:
+        workspace = QWidget()
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(16, 16, 16, 8)
+        layout.setSpacing(12)
+
+        layout.addWidget(self._build_request_card(default_timeout))
+        self.notification = NotificationBar()
+        layout.addWidget(self.notification)
+
+        self.request_editor = XmlEditor(self._theme.palette.xml)
+        self.response_editor = XmlEditor(self._theme.palette.xml, read_only=True)
+        self.format_button = _button("格式化", "subtle", "格式化請求 XML (Ctrl+Shift+F)")
+        self.copy_button = _button("複製", "subtle", "複製回應結果")
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(12)
+        splitter.addWidget(self._editor_panel("請求參數（多個用 #~# 隔開）", self.format_button, self.request_editor))
+        splitter.addWidget(self._editor_panel("回應結果", self.copy_button, self.response_editor))
+        splitter.setSizes([1, 1])
+        layout.addWidget(splitter, 1)
+        return workspace
+
+    def _build_request_card(self, default_timeout: int) -> QFrame:
+        card = QFrame()
+        card.setObjectName("Card")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(8)
+
+        self.name_edit = QLineEdit()
+        self.name_edit.setObjectName("NameEdit")
+        self.name_edit.setPlaceholderText("請輸入配置名稱")
+        self.name_edit.setMaxLength(100)
+
+        self.url_edit = QLineEdit()
+        self.url_edit.setPlaceholderText("http://host/path?WSDL")
+        self.load_button = _button(LOAD_LABEL, tooltip="讀取 WSDL 的服務方法 (F3)")
+        url_row = QHBoxLayout()
+        url_row.addWidget(self.url_edit, 1)
+        url_row.addWidget(self.load_button)
+
+        self.url_hint = QLabel("結尾請加上 ?WSDL")
+        self.url_hint.setObjectName("Hint")
+        self.url_hint.hide()
+
+        self.method_combo = QComboBox()
+        self.method_combo.setEditable(True)
+        self.method_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.method_combo.lineEdit().setPlaceholderText("選擇或搜尋服務方法")
+        completer = QCompleter(self.method_combo.model(), self.method_combo)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.method_combo.setCompleter(completer)
+
+        timeout_label = QLabel("逾時")
+        timeout_label.setObjectName("FieldLabel")
+        self.timeout_spin = QSpinBox()
+        self.timeout_spin.setRange(TIMEOUT_MIN, TIMEOUT_MAX)
+        self.timeout_spin.setSuffix(" 秒")
+        self.timeout_spin.setValue(min(max(default_timeout, TIMEOUT_MIN), TIMEOUT_MAX))
+        self.run_button = _button(RUN_LABEL, "primary", "執行請求 (F5)")
+        self.clear_button = _button("清空", tooltip="清空請求與回應 (F6)")
+        method_row = QHBoxLayout()
+        method_row.addWidget(self.method_combo, 1)
+        method_row.addWidget(timeout_label)
+        method_row.addWidget(self.timeout_spin)
+        method_row.addWidget(self.run_button)
+        method_row.addWidget(self.clear_button)
+
+        layout.addWidget(self.name_edit)
+        layout.addLayout(url_row)
+        layout.addWidget(self.url_hint)
+        layout.addLayout(method_row)
+        return card
+
+    @staticmethod
+    def _editor_panel(title: str, button: QPushButton, editor: XmlEditor) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        header = QHBoxLayout()
+        label = QLabel(title)
+        label.setObjectName("SectionTitle")
+        header.addWidget(label)
+        header.addStretch(1)
+        header.addWidget(button)
+        layout.addLayout(header)
+        layout.addWidget(editor, 1)
+        return panel
+
+    def _build_shortcuts(self) -> None:
+        for key, handler in (
+            ("F1", self._on_add_requested),
+            ("F2", self._on_delete_current),
+            ("F3", self.load_button.click),
+            ("F5", self.run_button.click),
+            ("F6", self._on_clear),
+            ("Ctrl+Shift+F", self._on_format),
+            ("Esc", self.close),
+        ):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.activated.connect(handler)
+
+    def _connect_signals(self) -> None:
+        self.connection_list.selectionChanged.connect(self._on_selection_changed)
+        self.connection_list.addRequested.connect(self._on_add_requested)
+        self.connection_list.deleteRequested.connect(self._on_delete_requested)
+        self.name_edit.editingFinished.connect(self._commit_name)
+        self.url_edit.editingFinished.connect(self._commit_url)
+        self.url_edit.textChanged.connect(self._update_url_hint)
+        self.clear_button.clicked.connect(self._on_clear)
+        self.format_button.clicked.connect(self._on_format)
+        self.copy_button.clicked.connect(self._on_copy)
+        self.about_button.clicked.connect(self._show_about)
+
+    # ---------- 連線資料 ----------
+
+    def _load_initial_connections(self) -> None:
+        if self._store.recovered_from_corruption:
+            self._notify("warning", f"連線設定檔無法讀取，已備份為 {self._store.backup_path.name} 並重新建立")
+        if not self._store.all():
+            self._store.add()
+            if not self._store.recovered_from_corruption:
+                self._notify("info", "請輸入配置名稱與 WSDL 網址（結尾加上 ?WSDL），再按「讀取 WSDL」")
+        self.connection_list.set_connections(self._store.all())
+
+    def _current_connection(self) -> Connection | None:
+        return self._store.get(self._current_uuid) if self._current_uuid else None
+
+    @Slot(str)
+    def _on_selection_changed(self, uuid: str) -> None:
+        if self._current_uuid and self._current_uuid != uuid:
+            self._commit_fields()  # 切換前先保存上一筆尚未確認的編輯
+        self._current_uuid = uuid or None
+        conn = self._current_connection()
+        self.name_edit.setText(conn.name if conn else "")
+        self.url_edit.setText(conn.url if conn else "")
+        self._set_methods(conn.methods if conn else [])
+
+    def _commit_fields(self) -> None:
+        self._commit_name()
+        self._commit_url()
+
+    def _commit_name(self) -> None:
+        conn = self._current_connection()
+        name = self.name_edit.text().strip()
+        if conn is not None and name != conn.name:
+            self._store.rename(conn.uuid, name)
+            self.connection_list.update_connection(self._store.get(conn.uuid))
+
+    def _commit_url(self) -> None:
+        conn = self._current_connection()
+        url = self.url_edit.text().strip()
+        if conn is not None and url != conn.url:
+            self._store.set_url(conn.uuid, url)
+            self.connection_list.update_connection(self._store.get(conn.uuid))
+
+    def _set_methods(self, methods: list[str]) -> None:
+        self._methods = list(methods)
+        self.method_combo.clear()
+        self.method_combo.addItems(self._methods)
+        if self._methods:
+            self.method_combo.setCurrentIndex(0)
+
+    def _update_url_hint(self, text: str) -> None:
+        url = text.strip()
+        self.url_hint.setVisible(bool(url) and not url.lower().endswith("?wsdl"))
+
+    def _on_add_requested(self) -> None:
+        if self._pending:
+            return
+        self._commit_fields()
+        conn = self._store.add()
+        self.connection_list.set_connections(self._store.all(), select_uuid=conn.uuid)
+        self.name_edit.setFocus()
+
+    def _on_delete_current(self) -> None:
+        if self._current_uuid:
+            self._on_delete_requested(self._current_uuid)
+
+    @Slot(str)
+    def _on_delete_requested(self, uuid: str) -> None:
+        if self._pending:
+            return
+        conn = self._store.get(uuid)
+        if conn is None or not self._confirm("刪除連線", f"確定要刪除「{conn.name or UNNAMED}」嗎？"):
+            return
+        if uuid != self._current_uuid:
+            self._commit_fields()
+        keep = self._current_uuid if self._current_uuid != uuid else None
+        self._current_uuid = None  # 避免把欄位內容寫回即將刪除的連線
+        self._store.remove(uuid)
+        if not self._store.all():
+            self._store.add()
+        self.connection_list.set_connections(self._store.all(), select_uuid=keep)
+        self._notify("success", "已刪除連線")
+
+    # ---------- 編輯器工具 ----------
+
+    def _on_clear(self) -> None:
+        if self._pending:
+            return
+        self.request_editor.clear()
+        self.response_editor.clear()
+        self._reset_status()
+
+    def _on_format(self) -> None:
+        text = self.request_editor.toPlainText()
+        if not text.strip():
+            return
+        try:
+            formatted = format_xml(text)
+        except ValueError:
+            self._notify("warning", "請求內容不是合法的 XML，無法格式化")
+            return
+        cursor = self.request_editor.textCursor()
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.insertText(formatted)  # 用游標取代，保留復原紀錄
+
+    def _on_copy(self) -> None:
+        text = self.response_editor.toPlainText()
+        if not text:
+            self._notify("info", "沒有可複製的回應內容")
+            return
+        QGuiApplication.clipboard().setText(text)
+        self._notify("success", "已複製回應結果")
+
+    # ---------- 狀態、通知、主題 ----------
+
+    def _set_status(self, state: str, label: str, detail: str = "") -> None:
+        self.status_state.setProperty("state", state)
+        repolish(self.status_state)
+        self.status_state.setText(label)
+        self.status_detail.setText(detail)
+
+    def _reset_status(self) -> None:
+        self._set_status("", "就緒")
+
+    def _notify(self, level: str, text: str) -> None:
+        self.notification.show_message(level, text)
+
+    @Slot(object)
+    def _on_theme_changed(self, palette: ThemePalette) -> None:
+        self.request_editor.set_colors(palette.xml)
+        self.response_editor.set_colors(palette.xml)
+        for mode, action in self.theme_actions.items():
+            action.setChecked(mode is self._theme.mode)
+
+    def _show_about(self) -> None:
+        about = self._about
+        QMessageBox.about(
+            self,
+            f"關於 {about.name}",
+            f"<h3>{about.name}</h3>"
+            f"<p>版本 {about.version}</p>"
+            "<p>這是一款針對 WebService 設計的開源工具，簡單好用、配置靈活。</p>"
+            f"<p><a href='{about.website}'>{about.website}</a></p>"
+            "<p>原創：Tiger Tseng</p>"
+            f"<p>{about.copyright}</p>",
+        )
+
+    def _confirm(self, title: str, text: str) -> bool:
+        answer = QMessageBox.question(
+            self, title, text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def closeEvent(self, event) -> None:
+        if not self._confirm("離開程式", "確定要離開嗎？"):
+            event.ignore()
+            return
+        self._commit_fields()
+        self._pending = None
+        event.accept()
