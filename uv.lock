@@ -445,7 +445,6 @@ dependencies = [
     { name = "pyside6-essentials" },
     { name = "pyyaml" },
     { name = "suds" },
-    { name = "wxpython" },
 ]
 
 [package.dev-dependencies]
@@ -462,7 +461,6 @@ requires-dist = [
     { name = "pyside6-essentials", specifier = ">=6.11.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "suds", specifier = ">=1.2.0" },
-    { name = "wxpython", specifier = ">=4.3.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -488,17 +486,4 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/0e/6a/2bdabce8e5f9171b6c9c35a7843a3ce959bac9969ec7729e0041d578bbf2/wingrab-0.0.2.tar.gz", hash = "sha256:383177b663f15903c9188cd0dbb3f5d7514b315cf2a5b4035779557db7d84daf", size = 7495, upload-time = "2024-12-14T14:35:47.237Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/44/25/a40ef8490616cdbd801d84f6f363d19046eea046d7780eb1cbe6d5403b38/WinGrab-0.0.2-py3-none-any.whl", hash = "sha256:e0f517bb8fa17cf9fe147bfb62a5fbb657fc703d3f85edc99fe4ef72df7d29ff", size = 8228, upload-time = "2024-12-14T14:35:44.62Z" },
-]
-
-[[package]]
-name = "wxpython"
-version = "4.3.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3d/dd/026f6286f8beefcdd9551ad2e05b4e3edb45e638cdc067db211c53c950ce/wxpython-4.3.1.tar.gz", hash = "sha256:4e3a95b63175be8e10f0662de506a36d8cc6cb86ecc5b30ae880c8dafb34a0cd", size = 64071924, upload-time = "2026-07-30T01:11:13.852Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/6b/b526cadb25bcf95f29e899198b8fb5d443bdf7f34122298a0cdb2783ba5b/wxpython-4.3.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:a5e771bb8a6115ca3f52facb66e661c341591def4ae5bcc1616ce824323697cc", size = 20027593, upload-time = "2026-07-30T01:10:54.332Z" },
-    { url = "https://files.pythonhosted.org/packages/f1/cd/93e944a4c072325787cc226c8987c339db3e313fe684314305bfaff15070/wxpython-4.3.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:6e4ad9bae9758bde843d9d4d713421451b2d90858805611c8a5ad3844b8ca66f", size = 18827057, upload-time = "2026-07-30T01:10:57.836Z" },
-    { url = "https://files.pythonhosted.org/packages/d0/bc/76f8ed6d9b8484a32d60cfac804056f7b28c66d1c8c461e283d1d967d4de/wxpython-4.3.1-cp314-cp314-win32.whl", hash = "sha256:f2a0721f56ad45bfea1edae8cf9de662c4048647bbd25e55f8d73644d26aba72", size = 16662676, upload-time = "2026-07-30T01:11:01.344Z" },
-    { url = "https://files.pythonhosted.org/packages/16/73/ff21c019e8aaad5eb563859559ba2a4f6efd0581834703db993d64abea97/wxpython-4.3.1-cp314-cp314-win_amd64.whl", hash = "sha256:bbb4cefea441cba77f81b0ac2f7445f0ad01f18fee3b72a78ed48298b3f8f0ab", size = 18967348, upload-time = "2026-07-30T01:11:04.774Z" },
-    { url = "https://files.pythonhosted.org/packages/0a/10/97d4671cd565cf156dcb3223a45cad34236ed1825a2abf0c5c815ad2daec/wxpython-4.3.1-cp314-cp314-win_arm64.whl", hash = "sha256:d69d21344d92488465e32118363d2ef307aee54f9d33a0826180e6bee8fbfd91", size = 16622520, upload-time = "2026-07-30T01:11:08.148Z" },
 ]

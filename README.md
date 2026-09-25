@@ -3,25 +3,23 @@
 WebService服務部署到了服務器，但是只能本地訪問，下載soapui有點太大了，找其他的測試工具又沒有合適的，就自己寫了個比較簡單的小工具！
 
 * Python 3.14
-* wxPython==4.3.1
-* suds==1.2.0
-* lxml==6.1.3
-* PyInstaller==6.22.3
+* PySide6（Essentials）6.11
+* suds 1.2
+* lxml 6.1
+* PyInstaller 6.22
 
 ## 開發說明
 1. 安裝依賴：`$ uv sync`（或 `$ pip install -r requirements.txt`，此檔由 `uv export --format requirements-txt --no-hashes --no-emit-project -o requirements.txt` 產生）
-2. 使用vscode開發，打開src/ws-tool.py文件，點擊運行→啟動調試，或者F5啟動程序
-3. 其他工具開發，執行`$ python ws-tool.py`運行程序
-4. 打包exe時候直接運行bin/package.bat即可，執行完會生成dist目錄，里面是打包好的運行文件
-5. fbp下的WxPython-UI.fbp文件是頁面設計，需要用[wxFormBuilder](https://github.com/wxFormBuilder/wxFormBuilder)打開
+2. 啟動程式：`$ uv run python src/ws_tool.py`
+3. 執行測試：`$ uv run pytest`
+4. UI 檢測工具（類似瀏覽器的「檢查元素」）：`$ uv run python -m PyQtInspect --direct --file src/ws_tool.py`
+5. 打包 exe：執行根目錄的 `build.bat`，完成後會在 `dist` 目錄產生 `WebService-Tool.exe`
 6. 暫時不支持mac環境打包，如果有想法也可以自己去找到合適的配套方案
 
-## 打包方式
-根目錄下指令  
-#### 打成一包
-`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -D -w -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
-#### 打成一個檔案
-`pyinstaller --add-data="src/img:img" --version-file src/config/file_version_info.txt -F -w -n WebService-Tool -i src/img/favicon.ico src/ws_tool.py`  
+## 介面
+* 左側為連線清單（可搜尋、新增、刪除），右側為請求與回應工作區
+* 左下角「主題」可切換 跟隨系統 / 淺色 / 深色
+* 快捷鍵：F1 新增連線、F2 刪除連線、F3 讀取 WSDL、F5 執行、F6 清空、Ctrl+Shift+F 格式化請求、Esc 離開
 
 ## 版本產生
 切到 src/config 底下輸入
@@ -35,7 +33,6 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 ## 下載體驗
 
 - 下載檔案：[WebService.exe](<https://github.com/m121752332/webservice-py-tool/releases>)
-- 下載畫面設計器: [wxFormBuilder](<https://github.com/wxFormBuilder/wxFormBuilder/releases/tag/v4.1.0>)
 
 
 ## 演示效果
@@ -52,16 +49,5 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
     </tr>
     <tr>
         <td><img src="docs/webservice_tool_003.png"/></td>
-    </tr>
-</table>
-
-
-
-
-## 畫面設計器預覽
-
-<table>
-    <tr>
-        <td><img src="docs/webservice_tool_001.png"/></td>
     </tr>
 </table>
