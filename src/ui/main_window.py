@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
-from src.ui.connection_list import UNNAMED, ConnectionList
+from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.notification_bar import NotificationBar
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
@@ -39,6 +39,7 @@ LOG_TEXT_CAP = 2000
 LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
+NEW_FOLDER_NAME = "新目錄"
 THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
 
 
@@ -268,6 +269,12 @@ class MainWindow(QMainWindow):
         self.connection_list.selectionChanged.connect(self._on_selection_changed)
         self.connection_list.addRequested.connect(self._on_add_requested)
         self.connection_list.deleteRequested.connect(self._on_delete_requested)
+        self.connection_list.addFolderRequested.connect(self._on_add_folder_requested)
+        self.connection_list.deleteFolderRequested.connect(self._on_delete_folder_requested)
+        self.connection_list.folderRenamed.connect(self._on_folder_renamed)
+        self.connection_list.folderExpandedChanged.connect(self._on_folder_expanded_changed)
+        self.connection_list.connectionMoved.connect(self._on_connection_moved)
+        self.connection_list.folderMoved.connect(self._on_folder_moved)
         self.name_edit.editingFinished.connect(self._commit_name)
         self.url_edit.editingFinished.connect(self._commit_url)
         self.url_edit.textChanged.connect(self._update_url_hint)
@@ -339,7 +346,7 @@ class MainWindow(QMainWindow):
         if self._pending:
             return
         self._commit_fields()
-        conn = self._store.add()
+        conn = self._store.add(self.connection_list.current_folder())
         self.connection_list.clear_search()  # 避免新連線被搜尋篩選隱藏卻又被選取
         self._refresh_tree(conn.uuid)
         self.name_edit.setFocus()
@@ -360,6 +367,59 @@ class MainWindow(QMainWindow):
             self._store.add()
         self._refresh_tree(keep)
         self._notify("success", "已刪除連線")
+
+    # ---------- 目錄 ----------
+
+    def _on_add_folder_requested(self) -> None:
+        if self._pending:
+            return
+        self._commit_fields()
+        self.connection_list.clear_search()  # 避免新目錄被搜尋篩選隱藏
+        folder = self._store.add_folder(NEW_FOLDER_NAME)
+        self._refresh_tree()
+        self.connection_list.edit_folder(folder.uuid)
+
+    @Slot(str, str)
+    def _on_folder_renamed(self, uuid: str, name: str) -> None:
+        self._store.rename_folder(uuid, name)
+
+    @Slot(str, bool)
+    def _on_folder_expanded_changed(self, uuid: str, expanded: bool) -> None:
+        self._store.set_folder_expanded(uuid, expanded)
+
+    @Slot(str)
+    def _on_delete_folder_requested(self, uuid: str) -> None:
+        if self._pending:
+            return
+        folder = self._store.get_folder(uuid)
+        if folder is None:
+            return
+        count = sum(1 for conn in self._store.all() if conn.folder == uuid)
+        text = f"確定要刪除目錄「{folder.name or FOLDER_UNNAMED}」嗎？"
+        if count:
+            text += f"裡面的 {count} 筆連線會移到最外層。"
+        if not self._confirm("刪除目錄", text):
+            return
+        self._commit_fields()
+        self._store.remove_folder(uuid)
+        self._refresh_tree()
+        self._notify("success", "已刪除目錄")
+
+    @Slot(str, object, int)
+    def _on_connection_moved(self, uuid: str, folder, index: int) -> None:
+        if self._pending:
+            return
+        self._commit_fields()  # 重建清單會重新載入欄位，先保存尚未確認的編輯
+        self._store.move_connection(uuid, folder, index)
+        self._refresh_tree()
+
+    @Slot(str, int)
+    def _on_folder_moved(self, uuid: str, index: int) -> None:
+        if self._pending:
+            return
+        self._commit_fields()
+        self._store.move_folder(uuid, index)
+        self._refresh_tree()
 
     # ---------- 背景讀取與執行 ----------
 

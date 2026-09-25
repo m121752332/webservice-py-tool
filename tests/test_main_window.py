@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtWidgets import QAbstractItemView
 
 from src.core.connection_store import ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch
@@ -76,6 +77,11 @@ def seed(store, name="正式區", url="http://prod/ws?WSDL", methods=("GetPOData
 
 def combo_items(combo):
     return [combo.itemText(i) for i in range(combo.count())]
+
+
+def press_shortcut(window, key):
+    shortcut = next(sc for sc in window.findChildren(QShortcut) if sc.key() == QKeySequence(key))
+    shortcut.activated.emit()
 
 
 def test_format_size():
@@ -369,6 +375,7 @@ def test_busy_state_disables_other_actions(env):
     assert not window.clear_button.isEnabled()
     assert not window.url_edit.isEnabled()
     assert not window.connection_list.tree.isEnabled()
+    assert not window.connection_list.add_folder_button.isEnabled()
     assert window.status_state.text() == "執行中…"
     env.service.gate.set()
     wait_until(lambda: window.status_state.text() == "● 成功")
@@ -405,3 +412,97 @@ def test_cancel_load(env):
     wait_until(lambda: not window._tasks)
     assert env.store.get(uuid).methods == []
     assert window.load_button.text() == LOAD_LABEL
+
+
+def test_add_inside_selected_folder(env):
+    seed(env.store)
+    folder = env.store.add_folder("TIPTOP").uuid
+    window = env.make()
+    window.connection_list.select(folder)
+    window.connection_list.add_button.click()
+    new_uuid = window.connection_list.current_uuid()
+    assert env.store.get(new_uuid).folder == folder
+    assert window.connection_list.current_folder() == folder
+
+
+def test_add_folder_starts_rename_and_saves_name(env):
+    seed(env.store)
+    window = env.make()
+    window.connection_list.add_folder_button.click()
+    folders = env.store.folders()
+    assert [folder.name for folder in folders] == ["新目錄"]
+    assert window.connection_list.current_folder() == folders[0].uuid
+    assert window.connection_list.tree.state() == QAbstractItemView.State.EditingState
+    window.connection_list.tree.currentItem().setText(0, "TIPTOP")
+    assert ConnectionStore(env.store.path).get_folder(folders[0].uuid).name == "TIPTOP"
+
+
+def test_delete_folder_moves_connections_to_root(env):
+    conn = seed(env.store, "A")
+    folder = env.store.add_folder("TIPTOP").uuid
+    env.store.move_connection(conn, folder, 0)
+    window = env.make()
+    asked = []
+    window._confirm = lambda title, text: asked.append(text) or True
+    window.connection_list.deleteFolderRequested.emit(folder)
+    reloaded = ConnectionStore(env.store.path)
+    assert reloaded.folders() == []
+    assert reloaded.get(conn).folder is None
+    assert asked == ["確定要刪除目錄「TIPTOP」嗎？裡面的 1 筆連線會移到最外層。"]
+    assert window.connection_list.current_uuid() == conn
+    assert window.notification.text == "已刪除目錄"
+
+
+def test_delete_empty_folder_asks_short_question(env):
+    seed(env.store)
+    folder = env.store.add_folder("空的").uuid
+    window = env.make()
+    asked = []
+    window._confirm = lambda title, text: asked.append(text) or False
+    window.connection_list.deleteFolderRequested.emit(folder)
+    assert asked == ["確定要刪除目錄「空的」嗎？"]
+    assert env.store.get_folder(folder) is not None
+
+
+def test_f2_deletes_selected_folder(env):
+    seed(env.store)
+    folder = env.store.add_folder("TIPTOP").uuid
+    window = env.make()
+    window.connection_list.select(folder)
+    press_shortcut(window, "F2")
+    assert env.store.folders() == []
+
+
+def test_f2_deletes_selected_connection(env):
+    first = seed(env.store, "A")
+    second = seed(env.store, "B")
+    window = env.make()
+    window.connection_list.select(second)
+    press_shortcut(window, "F2")
+    assert [conn.uuid for conn in env.store.all()] == [first]
+
+
+def test_move_signals_persist_and_keep_unsaved_edits(env):
+    a = seed(env.store, "A")
+    b = seed(env.store, "B")
+    f1 = env.store.add_folder("F1").uuid
+    f2 = env.store.add_folder("F2").uuid
+    window = env.make()
+    window.connection_list.select(b)
+    window.name_edit.setText("B2")  # 尚未觸發 editingFinished
+    window.connection_list.connectionMoved.emit(a, f1, 0)
+    window.connection_list.folderMoved.emit(f2, 0)
+    reloaded = ConnectionStore(env.store.path)
+    assert reloaded.get(a).folder == f1
+    assert [folder.uuid for folder in reloaded.folders()] == [f2, f1]
+    assert reloaded.get(b).name == "B2"
+    assert window.connection_list.current_uuid() == b
+    assert window.name_edit.text() == "B2"
+
+
+def test_folder_expansion_persisted(env):
+    seed(env.store)
+    folder = env.store.add_folder("F").uuid
+    window = env.make()
+    window.connection_list.folderExpandedChanged.emit(folder, False)
+    assert ConnectionStore(env.store.path).get_folder(folder).expanded is False
