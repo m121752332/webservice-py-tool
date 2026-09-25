@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 
 from PySide6.QtCore import QModelIndex, QSize, Qt, Signal
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QFont, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -26,6 +26,9 @@ from src.core.connection_store import Connection, Folder
 UNNAMED = "未命名"
 FOLDER_UNNAMED = "未命名目錄"
 NO_URL = "尚未設定網址"
+FOLDER_ROW_HEIGHT = 36
+FOLDER_FONT_SIZE = 11.5  # 比連線名稱大一級，作為分組標題
+FOLDER_ICON_SIZE = 18
 ROOT_LABEL = "最外層"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
 _KIND_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -124,8 +127,8 @@ class ConnectionItemWidget(QWidget):
         self.subtitle = ElidedLabel()
         self.subtitle.setObjectName("ItemSubtitle")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 6, 8, 6)
-        layout.setSpacing(2)
+        layout.setContentsMargins(8, 3, 8, 3)
+        layout.setSpacing(0)
         layout.addWidget(self.title)
         layout.addWidget(self.subtitle)
         self.set_connection(conn)
@@ -188,6 +191,7 @@ class ConnectionList(QWidget):
         self.tree.setObjectName("ConnectionList")
         self.tree.setHeaderHidden(True)
         self.tree.setIndentation(14)
+        self.tree.setIconSize(QSize(FOLDER_ICON_SIZE, FOLDER_ICON_SIZE))
         self.tree.setExpandsOnDoubleClick(False)
         self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
@@ -348,6 +352,11 @@ class ConnectionList(QWidget):
         item.setText(0, folder.name or FOLDER_UNNAMED)
         item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        font = item.font(0)
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setPointSizeF(FOLDER_FONT_SIZE)
+        item.setFont(0, font)
+        item.setSizeHint(0, QSize(0, FOLDER_ROW_HEIGHT))  # 固定高度，清單內改名的編輯框才放得下
         return item
 
     def _add_connection_item(self, parent: QTreeWidgetItem, conn: Connection) -> None:
@@ -356,6 +365,7 @@ class ConnectionList(QWidget):
         item.setData(0, _KIND_ROLE, CONNECTION)
         item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)  # 連線不能當作放入目標
         widget = ConnectionItemWidget(conn)
+        widget.ensurePolished()  # 先套用 QSS 字型，高度才會依較小的網址字型計算
         item.setSizeHint(0, QSize(0, widget.sizeHint().height()))
         self.tree.setItemWidget(item, 0, widget)
 

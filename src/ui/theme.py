@@ -2,17 +2,21 @@
 """
 主題：Light / Dark 色票、QSS 樣板與切換管理
 """
+import tempfile
 from dataclasses import dataclass, fields
 from enum import StrEnum
+from pathlib import Path
 from string import Template
 
-from PySide6.QtCore import QObject, QSettings, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtCore import QObject, QPointF, QSettings, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QPalette, QPolygonF
 from PySide6.QtWidgets import QApplication, QWidget
 
 SETTINGS_KEY = "ui/theme"
 UI_FONT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI"]
 UI_FONT_SIZE = 10
+ARROW_DIR = Path(tempfile.gettempdir()) / "webservice-tool-theme"
+_ARROW_SCALE = 4  # 以 4 倍解析度繪製，縮小顯示時邊緣較平滑
 
 
 class ThemeMode(StrEnum):
@@ -91,6 +95,7 @@ QLabel#SectionTitle { font-weight: 600; }
 QLabel#Hint { color: $warning; }
 QLabel#FieldLabel, QLabel#ItemSubtitle, QLabel#StatusDetail { color: $text_muted; }
 QLabel#ItemTitle { font-weight: 600; }
+QLabel#ItemSubtitle { font-size: 9pt; }
 QFrame#Card { background: $surface; border: 1px solid $border; border-radius: 8px; }
 
 QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {
@@ -107,6 +112,14 @@ QLineEdit#NameEdit { font-size: 12pt; font-weight: 600; }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus { border: 1px solid $accent; }
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled { color: $text_muted; background: $bg; }
 QComboBox::drop-down { border: none; width: 24px; }
+QComboBox::down-arrow { image: url("$arrow_down"); width: 9px; height: 5px; }
+QSpinBox { padding-right: 24px; }
+QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 20px; border: none; background: transparent; }
+QSpinBox::up-button { subcontrol-position: top right; border-top-right-radius: 6px; }
+QSpinBox::down-button { subcontrol-position: bottom right; border-bottom-right-radius: 6px; }
+QSpinBox::up-button:hover, QSpinBox::down-button:hover { background: $surface_hover; }
+QSpinBox::up-arrow { image: url("$arrow_up"); width: 8px; height: 5px; }
+QSpinBox::down-arrow { image: url("$arrow_down"); width: 8px; height: 5px; }
 QComboBox QAbstractItemView {
     background: $surface;
     border: 1px solid $border;
@@ -132,8 +145,12 @@ QPushButton[variant="subtle"] { background: transparent; border: 1px solid trans
 QPushButton[variant="subtle"]:hover { background: $surface_hover; }
 QPushButton::menu-indicator { width: 0; }
 
-QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; }
-QTreeWidget#ConnectionList::item { border-radius: 6px; margin: 1px 0; padding: 4px 0; border-left: 3px solid transparent; }
+QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; show-decoration-selected: 0; }
+QTreeWidget#ConnectionList::item { border-radius: 6px; margin: 1px 0; border-left: 3px solid transparent; }
+QTreeWidget#ConnectionList QLineEdit {
+    padding: 1px 6px; border: 1px solid $accent; border-radius: 4px;
+    font-size: 11.5pt; font-weight: 600;  /* 清單內只有目錄可改名，與 connection_list.FOLDER_FONT_SIZE 一致 */
+}
 QTreeWidget#ConnectionList::item:hover { background: $surface_hover; }
 QTreeWidget#ConnectionList::item:selected { background: $surface_hover; color: $text; border-left: 3px solid $accent; }
 
@@ -164,9 +181,36 @@ QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 """)
 
 
-def build_stylesheet(palette: ThemePalette) -> str:
+def write_arrow_images(color: str, directory: Path) -> dict[str, str]:
+    """QSS 自訂下拉與微調按鈕後 Qt 不再畫箭頭，依主題顏色產生 ▲▼ 圖檔供 QSS 引用
+
+    檔名含顏色：Qt 會以路徑快取 QSS 圖片，切換主題時必須換新路徑才會重新載入
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    width, height = 10 * _ARROW_SCALE, 6 * _ARROW_SCALE
+    shapes = {
+        "arrow_up": [QPointF(0, height), QPointF(width, height), QPointF(width / 2, 0)],
+        "arrow_down": [QPointF(0, 0), QPointF(width, 0), QPointF(width / 2, height)],
+    }
+    paths = {}
+    for name, points in shapes.items():
+        image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(color))
+        painter.drawPolygon(QPolygonF(points))
+        painter.end()
+        path = directory / f"{name}-{color.lstrip('#').lower()}.png"
+        image.save(str(path))
+        paths[name] = path.as_posix()
+    return paths
+
+
+def build_stylesheet(palette: ThemePalette, arrows: dict[str, str]) -> str:
     values = {f.name: getattr(palette, f.name) for f in fields(palette) if isinstance(getattr(palette, f.name), str)}
-    return _QSS.substitute(values)
+    return _QSS.substitute(values | arrows)
 
 
 def build_qpalette(palette: ThemePalette) -> QPalette:
@@ -204,10 +248,11 @@ def repolish(widget: QWidget) -> None:
 class ThemeManager(QObject):
     themeChanged = Signal(object)
 
-    def __init__(self, app: QApplication, settings: QSettings):
+    def __init__(self, app: QApplication, settings: QSettings, arrow_dir: Path = ARROW_DIR):
         super().__init__(app)
         self._app = app
         self._settings = settings
+        self._arrow_dir = arrow_dir
         try:
             self._mode = ThemeMode(str(settings.value(SETTINGS_KEY, ThemeMode.SYSTEM.value)))
         except ValueError:
@@ -274,5 +319,6 @@ class ThemeManager(QObject):
         palette = self._effective_palette()
         self._palette = palette
         self._app.setPalette(build_qpalette(palette))
-        self._app.setStyleSheet(build_stylesheet(palette))
+        arrows = write_arrow_images(palette.text_muted, self._arrow_dir)
+        self._app.setStyleSheet(build_stylesheet(palette, arrows))
         self.themeChanged.emit(palette)

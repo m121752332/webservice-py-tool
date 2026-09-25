@@ -6,8 +6,8 @@ from PySide6.QtWidgets import QAbstractItemView
 
 from src.core.connection_store import Connection, Folder
 from src.ui.connection_list import (
-    ABOVE, BELOW, CONNECTION, FOLDER, FOLDER_UNNAMED, NO_URL, ON, UNNAMED, ConnectionList, Move, TreeLayout,
-    resolve_drop,
+    ABOVE, BELOW, CONNECTION, FOLDER, FOLDER_FONT_SIZE, FOLDER_ROW_HEIGHT, FOLDER_UNNAMED, NO_URL, ON, UNNAMED, ConnectionList, Move,
+    TreeLayout, resolve_drop,
 )
 
 CONNECTIONS = [
@@ -345,6 +345,14 @@ def test_delete_key_on_folder_requests_folder_delete(qapp):
     widget.deleteRequested.connect(connections.append)
     QTest.keyClick(widget.tree, Qt.Key.Key_Delete)
     assert folders == ["f2"] and connections == []
+
+
+def test_folder_rows_are_fixed_height_and_bold(qapp):
+    widget, _ = make_tree()
+    item = folder_item(widget, "f1")
+    assert item.sizeHint(0).height() == FOLDER_ROW_HEIGHT
+    assert item.font(0).bold()
+    assert item.font(0).pointSizeF() == FOLDER_FONT_SIZE
 
 
 def test_add_folder_button_emits(qapp):
