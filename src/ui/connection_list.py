@@ -2,6 +2,8 @@
 """
 左側連線清單：搜尋、選取、新增、刪除
 """
+from dataclasses import dataclass
+
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
@@ -21,6 +23,68 @@ from src.core.connection_store import Connection
 UNNAMED = "未命名"
 NO_URL = "尚未設定網址"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
+
+FOLDER = "folder"
+CONNECTION = "connection"
+ABOVE = "above"
+BELOW = "below"
+ON = "on"
+
+
+@dataclass
+class TreeLayout:
+    """清單目前的結構：目錄順序，以及各群組（目錄 uuid，None 為最外層）內的連線順序"""
+    folders: list[str]
+    groups: dict[str | None, list[str]]
+
+    def folder_of(self, conn_uuid: str) -> str | None:
+        for folder, members in self.groups.items():
+            if conn_uuid in members:
+                return folder
+        raise KeyError(conn_uuid)
+
+
+@dataclass(frozen=True)
+class Move:
+    kind: str  # FOLDER 或 CONNECTION
+    uuid: str
+    folder: str | None  # 連線的目標目錄；目錄移動時為 None
+    index: int  # 移除自己之後，在目標群組中的位置
+
+
+def resolve_drop(layout: TreeLayout, kind: str, uuid: str, target_kind: str | None,
+                 target_uuid: str | None, position: str) -> Move | None:
+    """計算拖放結果；target 為 None 表示放在空白處，放到自己身上時回傳 None"""
+    if kind == FOLDER:
+        return _resolve_folder_drop(layout, uuid, target_kind, target_uuid, position)
+    return _resolve_connection_drop(layout, uuid, target_kind, target_uuid, position)
+
+
+def _resolve_connection_drop(layout, uuid, target_kind, target_uuid, position) -> Move | None:
+    if target_uuid == uuid:
+        return None
+    if target_kind == CONNECTION:
+        folder = layout.folder_of(target_uuid)
+        members = [member for member in layout.groups[folder] if member != uuid]
+        return Move(CONNECTION, uuid, folder, members.index(target_uuid) + (0 if position == ABOVE else 1))
+    if target_kind == FOLDER and position != ON:
+        return Move(CONNECTION, uuid, None, 0)  # 最外層固定目錄在前、連線在後
+    folder = target_uuid if target_kind == FOLDER else None
+    members = [member for member in layout.groups[folder] if member != uuid]
+    return Move(CONNECTION, uuid, folder, len(members))
+
+
+def _resolve_folder_drop(layout, uuid, target_kind, target_uuid, position) -> Move | None:
+    others = [folder for folder in layout.folders if folder != uuid]
+    if target_kind == CONNECTION:
+        # 放到連線上：視為放在該連線所屬目錄之後；最外層連線則放到所有目錄最後面
+        target_uuid = layout.folder_of(target_uuid)
+        position = BELOW
+    if target_uuid is None:
+        return Move(FOLDER, uuid, None, len(others))
+    if target_uuid == uuid:
+        return None
+    return Move(FOLDER, uuid, None, others.index(target_uuid) + (0 if position == ABOVE else 1))
 
 
 class ElidedLabel(QLabel):
