@@ -506,3 +506,58 @@ def test_folder_expansion_persisted(env):
     window = env.make()
     window.connection_list.folderExpandedChanged.emit(folder, False)
     assert ConnectionStore(env.store.path).get_folder(folder).expanded is False
+
+
+# ---------- F1：選取目錄時停用工作區 ----------
+
+def test_selecting_folder_disables_workspace_fields(env):
+    uuid = seed(env.store)
+    folder = env.store.add_folder("TIPTOP").uuid
+    window = env.make()
+    window.connection_list.select(folder)
+    assert not window.name_edit.isEnabled()
+    assert not window.url_edit.isEnabled()
+    assert not window.method_combo.isEnabled()
+    assert not window.timeout_spin.isEnabled()
+    assert not window.load_button.isEnabled()
+    assert not window.run_button.isEnabled()
+    assert not window.clear_button.isEnabled()
+    window.connection_list.select(uuid)
+    assert window.name_edit.isEnabled()
+    assert window.url_edit.isEnabled()
+    assert window.method_combo.isEnabled()
+    assert window.timeout_spin.isEnabled()
+    assert window.load_button.isEnabled()
+    assert window.run_button.isEnabled()
+    assert window.clear_button.isEnabled()
+
+
+def test_methods_loaded_ignores_unknown_or_none_uuid(env):
+    """對應 F1 的 KeyError(None) 問題：uuid 為 None（目錄選取中）或已不存在時不應丟例外或寫入"""
+    uuid = seed(env.store, methods=())
+    window = env.make()
+    window._on_methods_loaded(None, ["X"])
+    window._on_methods_loaded("does-not-exist", ["Y"])
+    assert env.store.get(uuid).methods == []
+    assert env.store.get("does-not-exist") is None
+
+
+def test_load_and_run_are_noop_without_selected_connection(env):
+    seed(env.store)
+    folder = env.store.add_folder("TIPTOP").uuid
+    window = env.make()
+    window.connection_list.select(folder)
+    window._on_load_clicked()
+    window._on_run_clicked()
+    assert env.service.calls == []
+    assert window._pending is None
+
+
+# ---------- F6：重建清單重新選回同一筆連線時保留方法下拉選取 ----------
+
+def test_rebuild_keeps_current_connections_selected_method(env):
+    uuid = seed(env.store, methods=("A", "B"))
+    window = env.make()
+    window.method_combo.setCurrentText("B")
+    window.connection_list.connectionMoved.emit(uuid, None, 0)  # 觸發重建，該連線仍是目前選取
+    assert window.method_combo.currentText() == "B"

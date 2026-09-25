@@ -307,11 +307,19 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self, uuid: str) -> None:
         if self._current_uuid and self._current_uuid != uuid:
             self._commit_fields()  # 切換前先保存上一筆尚未確認的編輯
+        if uuid and uuid == self._current_uuid:
+            return  # F6：重建清單重新選回同一筆連線，欄位內容已正確，不必重新載入
         self._current_uuid = uuid or None
         conn = self._current_connection()
         self.name_edit.setText(conn.name if conn else "")
         self.url_edit.setText(conn.url if conn else "")
         self._set_methods(conn.methods if conn else [])
+        enabled = self._fields_enabled(busy=self._pending is not None)
+        for widget in (
+            self.name_edit, self.url_edit, self.method_combo, self.timeout_spin,
+            self.load_button, self.run_button, self.clear_button,
+        ):
+            widget.setEnabled(enabled)
 
     def _commit_fields(self) -> None:
         self._commit_name()
@@ -428,6 +436,8 @@ class MainWindow(QMainWindow):
             if self._pending[0] == "load":
                 self._cancel()
             return
+        if self._current_connection() is None:
+            return  # F1：目錄選取中（或快捷鍵繞過停用的按鈕）時沒有可載入的連線
         self._commit_fields()
         url = self.url_edit.text().strip()
         if not url:
@@ -440,6 +450,8 @@ class MainWindow(QMainWindow):
             if self._pending[0] == "run":
                 self._cancel()
             return
+        if self._current_connection() is None:
+            return  # F1：目錄選取中（或快捷鍵繞過停用的按鈕）時沒有可執行的連線
         self._commit_fields()
         url = self.url_edit.text().strip()
         method = self.method_combo.currentText().strip()
@@ -474,14 +486,19 @@ class MainWindow(QMainWindow):
         self._pending = None
         self._set_busy(None)
 
+    def _fields_enabled(self, busy: bool) -> bool:
+        """工作區欄位可編輯的條件：沒有背景工作進行中，且目前有選取連線（F1）"""
+        return not busy and self._current_uuid is not None
+
     def _set_busy(self, kind: str | None) -> None:
         busy = kind is not None
         self.load_button.setText(CANCEL_LABEL if kind == "load" else LOAD_LABEL)
         self.run_button.setText(CANCEL_LABEL if kind == "run" else RUN_LABEL)
-        self.load_button.setEnabled(kind in (None, "load"))
-        self.run_button.setEnabled(kind in (None, "run"))
+        # 進行中的載入／執行按鈕本身要保持可點擊，作為取消鈕；其餘依 busy 與是否有選取連線決定
+        self.load_button.setEnabled(kind == "load" or self._fields_enabled(busy))
+        self.run_button.setEnabled(kind == "run" or self._fields_enabled(busy))
         for widget in (self.clear_button, self.name_edit, self.url_edit, self.method_combo, self.timeout_spin):
-            widget.setEnabled(not busy)
+            widget.setEnabled(self._fields_enabled(busy))
         self.connection_list.set_busy(busy)
 
     @Slot(object, object)
@@ -512,6 +529,8 @@ class MainWindow(QMainWindow):
         self._set_status("error", "● 失敗", action)
 
     def _on_methods_loaded(self, uuid: str, methods: list[str]) -> None:
+        if self._store.get(uuid) is None:
+            return  # F1：連線在背景工作進行時被刪除，或 uuid 為 None（目錄選取中）
         self._store.set_methods(uuid, methods)
         self.connection_list.update_connection(self._store.get(uuid))
         if uuid == self._current_uuid:

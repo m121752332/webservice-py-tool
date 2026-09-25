@@ -231,6 +231,35 @@ def test_set_tree_keeps_current_selection(qapp):
     assert widget.current_folder() == "f1" and widget.current_uuid() is None
 
 
+def test_set_tree_default_selection_skips_collapsed_folder(qapp):
+    """F2：第一筆連線位於已收合目錄時，預設選取改為畫面上第一筆可見連線，且不展開該目錄"""
+    folders = [Folder("f1", "TIPTOP", False)]
+    connections = [
+        Connection("u1", "正式區", "http://prod/ws?WSDL", [], "f1"),
+        Connection("u2", "測試區", "http://test/ws?WSDL", []),
+    ]
+    widget = ConnectionList()
+    changes = record(widget.folderExpandedChanged)
+    widget.set_tree(folders, connections)
+    assert not folder_item(widget, "f1").isExpanded()
+    assert changes == []
+    assert widget.current_uuid() == "u2"
+
+
+def test_set_tree_keeps_folder_collapsed_when_current_connection_inside_it(qapp):
+    """F2：重建前選取的連線位於使用者剛收合的目錄中，重建後改選該目錄，目錄仍保持收合"""
+    widget, _ = make_tree()
+    assert widget.current_uuid() == "u1"  # 預設選到展開的 f1 內第一筆連線
+    folder_item(widget, "f1").setExpanded(False)  # 使用者收合該目錄
+    changes = record(widget.folderExpandedChanged)
+    collapsed_folders = [Folder("f1", "TIPTOP", False), Folder("f2", "", False)]
+    widget.set_tree(collapsed_folders, TREE)
+    assert not folder_item(widget, "f1").isExpanded()
+    assert changes == []
+    assert widget.current_folder() == "f1"
+    assert widget.current_uuid() is None
+
+
 def test_clicking_folder_toggles_and_reports(qapp):
     widget, _ = make_tree()
     changes = record(widget.folderExpandedChanged)
@@ -266,6 +295,17 @@ def test_edit_folder_starts_inline_editing(qapp):
     widget.edit_folder("f2")
     assert widget.current_folder() == "f2"
     assert widget.tree.state() == QAbstractItemView.State.EditingState
+
+
+def test_request_delete_current_ignored_while_renaming_folder(qapp):
+    """F4：正在重新命名目錄時按 F2／Delete 不應觸發刪除確認"""
+    widget, _ = make_tree()
+    widget.edit_folder("f1")
+    folders, connections = [], []
+    widget.deleteFolderRequested.connect(folders.append)
+    widget.deleteRequested.connect(connections.append)
+    widget.request_delete_current()
+    assert folders == [] and connections == []
 
 
 def test_filter_shows_matching_connection_under_its_folder(qapp):

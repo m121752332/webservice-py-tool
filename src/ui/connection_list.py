@@ -221,7 +221,11 @@ class ConnectionList(QWidget):
     # ---------- 對外介面 ----------
 
     def set_tree(self, folders: list[Folder], connections: list[Connection], select_uuid: str | None = None) -> None:
-        """依 store 資料重建整棵樹；選取 select_uuid，其次是重建前的目前項目，再其次是第一筆連線"""
+        """依 store 資料重建整棵樹；選取 select_uuid，其次是重建前的目前項目，再其次是畫面上第一筆可見連線。
+
+        除了明確指定 select_uuid，重建後一律不展開任何已收合的目錄（F2）：若重建前選取的連線
+        現在位於已收合目錄中，改選該目錄；預設選取也只在已展開目錄的子項與最外層連線中挑選。
+        """
         previous = _uuid_of(self.tree.currentItem())
         self._folder_names = {folder.uuid: folder.name for folder in folders}
         self._folder_expanded = {folder.uuid: folder.expanded for folder in folders}
@@ -234,10 +238,42 @@ class ConnectionList(QWidget):
             parents[folder.uuid].setExpanded(folder.expanded)
         self.tree.blockSignals(False)
         self._apply_filter(self.search_edit.text())
-        first = connections[0].uuid if connections else None
-        target = next((uuid for uuid in (select_uuid, previous, first) if uuid and self._item_for(uuid)), None)
-        if target:
-            self.select(target)
+        if select_uuid:
+            self.select(select_uuid)
+            return
+        item = self._resolve_previous(previous) or self._default_item()
+        if item is not None:
+            self._select_item_without_expanding(item)
+
+    def _resolve_previous(self, uuid: str | None) -> QTreeWidgetItem | None:
+        """重建前的選取項目若仍存在就沿用；連線位於已收合目錄中則改選該目錄，不展開"""
+        item = self._item_for(uuid) if uuid else None
+        if item is None:
+            return None
+        if _kind_of(item) == CONNECTION:
+            parent = item.parent()
+            if parent is not None and not parent.isExpanded():
+                return parent
+        return item
+
+    def _default_item(self) -> QTreeWidgetItem | None:
+        """沒有可沿用的選取時：已展開目錄中第一筆連線（依目錄順序），其次最外層第一筆連線，
+        再其次第一個最外層項目（一定是目錄）；樹是空的就回傳 None"""
+        root = self.tree.invisibleRootItem()
+        for row in range(root.childCount()):
+            top = root.child(row)
+            if _kind_of(top) != FOLDER:
+                break  # 目錄一定排在最外層連線之前
+            if top.isExpanded() and top.childCount():
+                return top.child(0)
+        for row in range(root.childCount()):
+            top = root.child(row)
+            if _kind_of(top) != FOLDER:
+                return top
+        return root.child(0) if root.childCount() else None
+
+    def _select_item_without_expanding(self, item: QTreeWidgetItem) -> None:
+        self.tree.setCurrentItem(item)
 
     def update_connection(self, conn: Connection) -> None:
         item = self._item_for(conn.uuid)
@@ -274,6 +310,8 @@ class ConnectionList(QWidget):
         self.tree.editItem(item, 0)
 
     def request_delete_current(self) -> None:
+        if self.tree.state() == QAbstractItemView.State.EditingState:
+            return  # F4：正在重新命名目錄時，F2／Delete 不應觸發刪除確認
         item = self.tree.currentItem()
         if _kind_of(item) == FOLDER:
             self.deleteFolderRequested.emit(_uuid_of(item))
