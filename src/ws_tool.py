@@ -8,7 +8,7 @@
 """
 import wx
 
-from src.ui import main
+from src.ui.main import main
 from loguru import logger
 
 if __name__ == '__main__':
