@@ -17,6 +17,12 @@ UI_FONT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI
 UI_FONT_SIZE = 10
 ARROW_DIR = Path(tempfile.gettempdir()) / "webservice-tool-theme"
 _ARROW_SCALE = 4  # 以 4 倍解析度繪製，縮小顯示時邊緣較平滑
+# 彩色按鈕在淺色與深色主題下共用：(底色, 懸浮, 按下)
+BUTTON_COLORS = {
+    "green": ("#16A34A", "#22C55E", "#15803D"),
+    "orange": ("#EA580C", "#F97316", "#C2410C"),
+    "blue": ("#2563EB", "#3B82F6", "#1D4ED8"),
+}
 
 
 class ThemeMode(StrEnum):
@@ -93,7 +99,10 @@ QFrame#Sidebar { background: $bg; border-right: 1px solid $border; }
 QLabel#AppTitle { font-size: 13pt; font-weight: 600; padding: 0 4px 4px 4px; }
 QLabel#SectionTitle { font-weight: 600; }
 QLabel#Hint { color: $warning; }
-QLabel#FieldLabel, QLabel#ItemSubtitle, QLabel#StatusDetail { color: $text_muted; }
+QLabel#FieldCaption { font-size: 8pt; font-weight: 600; padding-left: 2px; }
+QLabel#TimeoutLabel { color: $text; font-size: 11pt; font-weight: 600; }
+QSpinBox#TimeoutSpin { font-size: 11pt; font-weight: 600; }
+QLabel#ItemSubtitle, QLabel#StatusDetail { color: $text_muted; }
 QLabel#ItemTitle { font-weight: 600; }
 QLabel#ItemSubtitle { font-size: 9pt; }
 QFrame#Card { background: $surface; border: 1px solid $border; border-radius: 8px; }
@@ -143,6 +152,26 @@ QPushButton[variant="primary"]:hover { background: $accent_hover; border-color: 
 QPushButton[variant="primary"]:disabled { background: $border; border-color: $border; color: $text_muted; }
 QPushButton[variant="subtle"] { background: transparent; border: 1px solid transparent; padding: 4px 8px; }
 QPushButton[variant="subtle"]:hover { background: $surface_hover; }
+QPushButton[variant="green"], QPushButton[variant="orange"], QPushButton[variant="blue"] {
+    color: #FFFFFF; font-weight: 600; border-radius: 6px;
+}
+QPushButton[variant="green"] { background: $green; border: 1px solid $green; }
+QPushButton[variant="green"]:hover { background: $green_hover; border-color: $green_hover; }
+QPushButton[variant="green"]:pressed { background: $green_pressed; border-color: $green_pressed; }
+QPushButton[variant="orange"] { background: $orange; border: 1px solid $orange; }
+QPushButton[variant="orange"]:hover { background: $orange_hover; border-color: $orange_hover; }
+QPushButton[variant="orange"]:pressed { background: $orange_pressed; border-color: $orange_pressed; }
+QPushButton[variant="blue"] { background: $blue; border: 1px solid $blue; padding: 4px 14px; }
+QPushButton[variant="blue"]:hover { background: $blue_hover; border-color: $blue_hover; }
+QPushButton[variant="blue"]:pressed { background: $blue_pressed; border-color: $blue_pressed; }
+QPushButton[variant="green"]:disabled, QPushButton[variant="orange"]:disabled, QPushButton[variant="blue"]:disabled {
+    background: $border; border-color: $border; color: $text_muted;
+}
+QPushButton[variant="footer"] {
+    background: $surface; border: 1px solid $border; border-radius: 8px;
+    padding: 6px 12px; font-size: 10.5pt; font-weight: 600;
+}
+QPushButton[variant="footer"]:hover { background: $surface_hover; border-color: $accent; }
 QPushButton::menu-indicator { width: 0; }
 
 QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; show-decoration-selected: 0; }
@@ -210,7 +239,10 @@ def write_arrow_images(color: str, directory: Path) -> dict[str, str]:
 
 def build_stylesheet(palette: ThemePalette, arrows: dict[str, str]) -> str:
     values = {f.name: getattr(palette, f.name) for f in fields(palette) if isinstance(getattr(palette, f.name), str)}
-    return _QSS.substitute(values | arrows)
+    buttons = {}
+    for name, (base, hover, pressed) in BUTTON_COLORS.items():
+        buttons |= {name: base, f"{name}_hover": hover, f"{name}_pressed": pressed}
+    return _QSS.substitute(values | buttons | arrows)
 
 
 def build_qpalette(palette: ThemePalette) -> QPalette:

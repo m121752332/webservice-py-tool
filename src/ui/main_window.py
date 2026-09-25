@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 
 from loguru import logger
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import QSize, Qt, Slot
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
+from src.ui.effects import HoverLift
+from src.ui.icons import about_icon, theme_icon
 from src.ui.notification_bar import NotificationBar
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
@@ -40,6 +42,7 @@ LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 NEW_FOLDER_NAME = "新目錄"
+FOOTER_ICON_SIZE = 20
 THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
 
 
@@ -72,7 +75,14 @@ def _button(text: str, variant: str | None = None, tooltip: str = "") -> QPushBu
         button.setProperty("variant", variant)
     if tooltip:
         button.setToolTip(tooltip)
+    HoverLift(button)
     return button
+
+
+def _caption(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("FieldCaption")
+    return label
 
 
 class MainWindow(QMainWindow):
@@ -130,11 +140,14 @@ class MainWindow(QMainWindow):
         title.setWordWrap(True)
         self.connection_list = ConnectionList()
 
-        self.theme_button = _button("◐ 主題", "subtle", "切換淺色 / 深色主題")
+        self.theme_button = _button("主題", "footer", "切換淺色 / 深色主題")
         self.theme_button.setMenu(self._build_theme_menu())
-        self.about_button = _button("ⓘ 關於", "subtle")
+        self.about_button = _button("關於", "footer")
+        for button, icon in ((self.theme_button, theme_icon()), (self.about_button, about_icon())):
+            button.setIcon(icon)
+            button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
         footer = QHBoxLayout()
-        footer.setSpacing(4)
+        footer.setSpacing(8)
         footer.addWidget(self.theme_button)
         footer.addWidget(self.about_button)
         footer.addStretch(1)
@@ -171,8 +184,8 @@ class MainWindow(QMainWindow):
 
         self.request_editor = XmlEditor(self._theme.palette.xml)
         self.response_editor = XmlEditor(self._theme.palette.xml, read_only=True)
-        self.format_button = _button("格式化", "subtle", "格式化請求 XML (Ctrl+Shift+F)")
-        self.copy_button = _button("複製", "subtle", "複製回應結果")
+        self.format_button = _button("格式化", "blue", "格式化請求 XML (Ctrl+Shift+F)")
+        self.copy_button = _button("複製", "blue", "複製回應結果")
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
         splitter.setHandleWidth(12)
@@ -196,7 +209,7 @@ class MainWindow(QMainWindow):
 
         self.url_edit = QLineEdit()
         self.url_edit.setPlaceholderText("http://host/path?WSDL")
-        self.load_button = _button(LOAD_LABEL, tooltip="讀取 WSDL 的服務方法 (F3)")
+        self.load_button = _button(LOAD_LABEL, "green", "讀取 WSDL 的服務方法 (F3)")
         url_row = QHBoxLayout()
         url_row.addWidget(self.url_edit, 1)
         url_row.addWidget(self.load_button)
@@ -216,13 +229,14 @@ class MainWindow(QMainWindow):
         self.method_combo.setCompleter(completer)
 
         timeout_label = QLabel("逾時")
-        timeout_label.setObjectName("FieldLabel")
+        timeout_label.setObjectName("TimeoutLabel")
         self.timeout_spin = QSpinBox()
+        self.timeout_spin.setObjectName("TimeoutSpin")
         self.timeout_spin.setRange(TIMEOUT_MIN, TIMEOUT_MAX)
         self.timeout_spin.setSuffix(" 秒")
         self.timeout_spin.setValue(min(max(default_timeout, TIMEOUT_MIN), TIMEOUT_MAX))
         self.run_button = _button(RUN_LABEL, "primary", "執行請求 (F5)")
-        self.clear_button = _button("清空", tooltip="清空請求與回應 (F6)")
+        self.clear_button = _button("清空", "orange", "清空請求與回應 (F6)")
         method_row = QHBoxLayout()
         method_row.addWidget(self.method_combo, 1)
         method_row.addWidget(timeout_label)
@@ -230,9 +244,14 @@ class MainWindow(QMainWindow):
         method_row.addWidget(self.run_button)
         method_row.addWidget(self.clear_button)
 
+        layout.addWidget(_caption("連線名稱"))
         layout.addWidget(self.name_edit)
+        layout.addSpacing(4)
+        layout.addWidget(_caption("服務連結"))
         layout.addLayout(url_row)
         layout.addWidget(self.url_hint)
+        layout.addSpacing(4)
+        layout.addWidget(_caption("服務項目"))
         layout.addLayout(method_row)
         return card
 
