@@ -14,8 +14,12 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pyinstaller>=6.22.3",
+    "pyqtinspect>=0.5.0",
     "pytest>=9.1.1",
 ]
+
+[tool.uv]
+required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
