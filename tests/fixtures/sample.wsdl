@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<definitions xmlns="http://schemas.xmlsoap.org/wsdl/"
+             xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:tns="http://example.com/ws"
+             targetNamespace="http://example.com/ws">
+  <types>
+    <xsd:schema targetNamespace="http://example.com/ws" elementFormDefault="qualified">
+      <xsd:element name="GetPODataRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="request" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="GetPODataResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="response" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="AddTwoRequest">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="first" type="xsd:string"/>
+          <xsd:element name="second" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+      <xsd:element name="AddTwoResponse">
+        <xsd:complexType><xsd:sequence>
+          <xsd:element name="response" type="xsd:string"/>
+        </xsd:sequence></xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+  <message name="GetPODataIn"><part name="parameters" element="tns:GetPODataRequest"/></message>
+  <message name="GetPODataOut"><part name="parameters" element="tns:GetPODataResponse"/></message>
+  <message name="AddTwoIn"><part name="parameters" element="tns:AddTwoRequest"/></message>
+  <message name="AddTwoOut"><part name="parameters" element="tns:AddTwoResponse"/></message>
+  <portType name="SamplePortType">
+    <operation name="GetPOData"><input message="tns:GetPODataIn"/><output message="tns:GetPODataOut"/></operation>
+    <operation name="AddTwo"><input message="tns:AddTwoIn"/><output message="tns:AddTwoOut"/></operation>
+  </portType>
+  <binding name="SampleBinding" type="tns:SamplePortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="GetPOData">
+      <soap:operation soapAction="GetPOData"/>
+      <input><soap:body use="literal"/></input><output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="AddTwo">
+      <soap:operation soapAction="AddTwo"/>
+      <input><soap:body use="literal"/></input><output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+  <service name="SampleService">
+    <port name="SamplePort" binding="tns:SampleBinding">
+      <soap:address location="http://127.0.0.1:9/ws"/>
+    </port>
+  </service>
+</definitions>
