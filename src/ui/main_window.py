@@ -4,6 +4,7 @@
 """
 from dataclasses import dataclass
 
+from loguru import logger
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
@@ -24,10 +25,11 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.connection_store import Connection, ConnectionStore
-from src.core.soap_service import format_xml
+from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
 from src.ui.connection_list import UNNAMED, ConnectionList
 from src.ui.notification_bar import NotificationBar
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
+from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
 
 XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
@@ -75,6 +77,8 @@ class MainWindow(QMainWindow):
         self._current_uuid: str | None = None
         self._methods: list[str] = []
         self._pending = None  # 進行中工作的 tag：(kind, seq, uuid)
+        self._seq = 0
+        self._tasks = {}  # tag -> Task，保留參照直到收到回呼
 
         self.setWindowTitle(about.name)
         self.resize(1100, 700)
@@ -259,6 +263,8 @@ class MainWindow(QMainWindow):
         self.name_edit.editingFinished.connect(self._commit_name)
         self.url_edit.editingFinished.connect(self._commit_url)
         self.url_edit.textChanged.connect(self._update_url_hint)
+        self.load_button.clicked.connect(self._on_load_clicked)
+        self.run_button.clicked.connect(self._on_run_clicked)
         self.clear_button.clicked.connect(self._on_clear)
         self.format_button.clicked.connect(self._on_format)
         self.copy_button.clicked.connect(self._on_copy)
@@ -345,6 +351,108 @@ class MainWindow(QMainWindow):
             self._store.add()
         self.connection_list.set_connections(self._store.all(), select_uuid=keep)
         self._notify("success", "已刪除連線")
+
+    # ---------- 背景讀取與執行 ----------
+
+    def _on_load_clicked(self) -> None:
+        if self._pending:
+            if self._pending[0] == "load":
+                self._cancel()
+            return
+        self._commit_fields()
+        url = self.url_edit.text().strip()
+        if not url:
+            self._notify("warning", "請填寫 WSDL 網址")
+            return
+        self._start("load", self._service.load_methods, url, self.timeout_spin.value())
+
+    def _on_run_clicked(self) -> None:
+        if self._pending:
+            if self._pending[0] == "run":
+                self._cancel()
+            return
+        self._commit_fields()
+        url = self.url_edit.text().strip()
+        method = self.method_combo.currentText().strip()
+        if not url:
+            self._notify("warning", "請填寫 WSDL 網址")
+            return
+        if method not in self._methods:
+            self._notify("warning", "請選擇服務方法（可先按「讀取 WSDL」取得清單）")
+            return
+        self.response_editor.clear()
+        self._start("run", self._service.call, url, method,
+                    self.request_editor.toPlainText(), self.timeout_spin.value())
+
+    def _start(self, kind: str, fn, *args) -> None:
+        self._seq += 1
+        tag = (kind, self._seq, self._current_uuid)
+        self._pending = tag
+        self._set_busy(kind)
+        self._set_status("busy", "讀取中…" if kind == "load" else "執行中…")
+        self._tasks[tag] = run_in_background(
+            tag, fn, *args, on_success=self._on_task_succeeded, on_failure=self._on_task_failed
+        )
+
+    def _cancel(self) -> None:
+        self._finish()
+        self._set_status("", "已取消")
+        self._notify("info", "已取消。背景請求會在逾時後自動結束")
+
+    def _finish(self) -> None:
+        self._pending = None
+        self._set_busy(None)
+
+    def _set_busy(self, kind: str | None) -> None:
+        busy = kind is not None
+        self.load_button.setText(CANCEL_LABEL if kind == "load" else LOAD_LABEL)
+        self.run_button.setText(CANCEL_LABEL if kind == "run" else RUN_LABEL)
+        self.load_button.setEnabled(kind in (None, "load"))
+        self.run_button.setEnabled(kind in (None, "run"))
+        for widget in (self.clear_button, self.name_edit, self.url_edit, self.method_combo, self.timeout_spin):
+            widget.setEnabled(not busy)
+        self.connection_list.set_busy(busy)
+
+    @Slot(object, object)
+    def _on_task_succeeded(self, tag, value) -> None:
+        self._tasks.pop(tag, None)
+        if tag != self._pending:
+            return  # 已取消或被新的請求取代
+        self._finish()
+        kind, _seq, uuid = tag
+        if kind == "load":
+            self._on_methods_loaded(uuid, value)
+        else:
+            self._on_call_finished(value)
+
+    @Slot(object, object)
+    def _on_task_failed(self, tag, error) -> None:
+        self._tasks.pop(tag, None)
+        if tag != self._pending:
+            return
+        self._finish()
+        if isinstance(error, ParamCountMismatch):
+            self._notify("warning", str(error))
+            self._set_status("error", "● 失敗", "參數數量不符")
+            return
+        action = "讀取 WSDL 失敗" if tag[0] == "load" else "請求失敗"
+        logger.opt(exception=error).error(action)
+        self._notify("error", f"{action}：{error}")
+        self._set_status("error", "● 失敗", action)
+
+    def _on_methods_loaded(self, uuid: str, methods: list[str]) -> None:
+        self._store.set_methods(uuid, methods)
+        self.connection_list.update_connection(self._store.get(uuid))
+        if uuid == self._current_uuid:
+            self._set_methods(methods)
+        if not self.request_editor.toPlainText().strip():
+            self.request_editor.setPlainText(XML_DECLARATION)
+        self._set_status("success", "● 成功", f"讀取完成 · {len(methods)} 個方法")
+        self._notify("success", f"已讀取 {len(methods)} 個服務方法")
+
+    def _on_call_finished(self, result: CallResult) -> None:
+        self.response_editor.setPlainText(result.text)
+        self._set_status("success", "● 成功", f"{result.elapsed:.2f} s · {format_size(result.size)}")
 
     # ---------- 編輯器工具 ----------
 

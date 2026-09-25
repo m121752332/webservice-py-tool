@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
+import threading
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QCoreApplication, QSettings, QThreadPool
 from PySide6.QtGui import QGuiApplication
 
 from src.core.connection_store import ConnectionStore
-from src.core.soap_service import CallResult
-from src.ui.main_window import AboutInfo, MainWindow, format_size
+from src.core.soap_service import CallResult, ParamCountMismatch
+from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
 from src.ui.theme import DARK, ThemeManager, ThemeMode
+from tests.helpers import wait_until
 
 ABOUT = AboutInfo("WebService 測試工具", "v2.0.0", "Copyright", "https://example.com")
 
@@ -249,3 +251,144 @@ def test_close_requires_confirmation(env):
     window._confirm = lambda title, text: True
     assert window.close() is True
     assert env.store.get(uuid).name == "關閉前修改"
+
+
+def test_load_success_saves_methods(env):
+    uuid = seed(env.store, methods=())
+    window = env.make()
+    window.load_button.click()
+    wait_until(lambda: env.store.get(uuid).methods)
+    assert env.store.get(uuid).methods == ["AddTwo", "GetPOData"]
+    assert combo_items(window.method_combo) == ["AddTwo", "GetPOData"]
+    assert window.request_editor.toPlainText() == '<?xml version="1.0" encoding="utf-8"?>'
+    assert (window.status_state.text(), window.status_detail.text()) == ("● 成功", "讀取完成 · 2 個方法")
+    assert window.load_button.text() == LOAD_LABEL
+    assert env.service.calls == [("load", "http://prod/ws?WSDL", 30)]
+
+
+def test_load_keeps_existing_request(env):
+    seed(env.store, methods=())
+    window = env.make()
+    window.request_editor.setPlainText("<Request/>")
+    window.load_button.click()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert window.request_editor.toPlainText() == "<Request/>"
+
+
+def test_load_uses_unsaved_url(env):
+    uuid = seed(env.store)
+    window = env.make()
+    window.url_edit.setText("http://typed/ws?WSDL")  # 尚未觸發 editingFinished
+    window.load_button.click()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert env.service.calls == [("load", "http://typed/ws?WSDL", 30)]
+    assert env.store.get(uuid).url == "http://typed/ws?WSDL"
+
+
+def test_load_without_url_warns(env):
+    seed(env.store, url="")
+    window = env.make()
+    window.load_button.click()
+    assert window.notification.level == "warning"
+    assert window.notification.text == "請填寫 WSDL 網址"
+    assert env.service.calls == []
+
+
+def test_load_failure_shows_error(env):
+    seed(env.store)
+    env.service.error = ConnectionError("連不上")
+    window = env.make()
+    window.load_button.click()
+    wait_until(lambda: window.status_state.text() == "● 失敗")
+    assert window.notification.level == "error"
+    assert window.notification.text == "讀取 WSDL 失敗：連不上"
+    assert window.load_button.isEnabled() and window.run_button.isEnabled()
+
+
+def test_run_success_shows_response_and_stats(env):
+    seed(env.store)
+    window = env.make()
+    window.request_editor.setPlainText("<Request/>")
+    window.timeout_spin.setValue(45)
+    window.run_button.click()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert window.response_editor.toPlainText() == "<ok/>\n"
+    assert window.status_detail.text() == "0.12 s · 5 B"
+    assert window.run_button.text() == RUN_LABEL
+    assert env.service.calls == [("call", "http://prod/ws?WSDL", "GetPOData", "<Request/>", 45)]
+
+
+def test_run_requires_known_method(env):
+    seed(env.store, methods=())
+    window = env.make()
+    window.run_button.click()
+    assert window.notification.level == "warning"
+    assert window.notification.text == "請選擇服務方法（可先按「讀取 WSDL」取得清單）"
+    assert env.service.calls == []
+
+
+def test_run_param_mismatch_shows_warning(env):
+    seed(env.store)
+    env.service.error = ParamCountMismatch(2, 1)
+    window = env.make()
+    window.run_button.click()
+    wait_until(lambda: window.status_state.text() == "● 失敗")
+    assert window.notification.level == "warning"
+    assert window.notification.text == str(ParamCountMismatch(2, 1))
+    assert window.status_detail.text() == "參數數量不符"
+
+
+def test_run_failure_shows_error(env):
+    seed(env.store)
+    env.service.error = TimeoutError("timed out")
+    window = env.make()
+    window.run_button.click()
+    wait_until(lambda: window.status_state.text() == "● 失敗")
+    assert window.notification.level == "error"
+    assert window.notification.text == "請求失敗：timed out"
+
+
+def test_busy_state_disables_other_actions(env):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.run_button.click()
+    assert window.run_button.text() == CANCEL_LABEL and window.run_button.isEnabled()
+    assert not window.load_button.isEnabled()
+    assert not window.clear_button.isEnabled()
+    assert not window.url_edit.isEnabled()
+    assert not window.connection_list.list_view.isEnabled()
+    assert window.status_state.text() == "執行中…"
+    env.service.gate.set()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert window.load_button.isEnabled() and window.connection_list.list_view.isEnabled()
+
+
+def test_cancel_ignores_late_result(env):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.run_button.click()
+    window.run_button.click()  # 取消
+    assert window.run_button.text() == RUN_LABEL
+    assert window.load_button.isEnabled()
+    assert window.status_state.text() == "已取消"
+    env.service.gate.set()
+    QThreadPool.globalInstance().waitForDone(3000)
+    QCoreApplication.processEvents()
+    assert window.response_editor.toPlainText() == ""
+    assert window.status_state.text() == "已取消"
+
+
+def test_cancel_load(env):
+    uuid = seed(env.store, methods=())
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.load_button.click()
+    assert window.load_button.text() == CANCEL_LABEL
+    window.load_button.click()
+    env.service.gate.set()
+    QThreadPool.globalInstance().waitForDone(3000)
+    QCoreApplication.processEvents()
+    assert env.store.get(uuid).methods == []
+    assert window.load_button.text() == LOAD_LABEL
