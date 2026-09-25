@@ -368,11 +368,11 @@ def test_busy_state_disables_other_actions(env):
     assert not window.load_button.isEnabled()
     assert not window.clear_button.isEnabled()
     assert not window.url_edit.isEnabled()
-    assert not window.connection_list.list_view.isEnabled()
+    assert not window.connection_list.tree.isEnabled()
     assert window.status_state.text() == "執行中…"
     env.service.gate.set()
     wait_until(lambda: window.status_state.text() == "● 成功")
-    assert window.load_button.isEnabled() and window.connection_list.list_view.isEnabled()
+    assert window.load_button.isEnabled() and window.connection_list.tree.isEnabled()
 
 
 def test_cancel_ignores_late_result(env):

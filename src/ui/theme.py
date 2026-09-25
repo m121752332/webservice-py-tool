@@ -132,10 +132,11 @@ QPushButton[variant="subtle"] { background: transparent; border: 1px solid trans
 QPushButton[variant="subtle"]:hover { background: $surface_hover; }
 QPushButton::menu-indicator { width: 0; }
 
-QListWidget#ConnectionList { background: transparent; border: none; outline: 0; }
-QListWidget#ConnectionList::item { border-radius: 6px; margin: 1px 0; border-left: 3px solid transparent; }
-QListWidget#ConnectionList::item:hover { background: $surface_hover; }
-QListWidget#ConnectionList::item:selected { background: $surface_hover; border-left: 3px solid $accent; }
+QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; }
+QTreeWidget#ConnectionList::item { border-radius: 6px; margin: 1px 0; padding: 4px 0; border-left: 3px solid transparent; }
+QTreeWidget#ConnectionList::item:hover { background: $surface_hover; }
+QTreeWidget#ConnectionList::item:selected { background: $surface_hover; color: $text; border-left: 3px solid $accent; }
+QTreeWidget#ConnectionList::branch { background: transparent; }
 
 QFrame#NotificationBar { background: $surface; border: 1px solid $border; border-left: 4px solid $accent; border-radius: 8px; }
 QFrame#NotificationBar[level="success"] { border-left-color: $success; }

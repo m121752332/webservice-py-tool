@@ -1,28 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-左側連線清單：搜尋、選取、新增、刪除
+左側連線清單：目錄分組、搜尋、選取、新增、刪除、拖曳排序
 """
 from dataclasses import dataclass
 
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMenu,
     QPushButton,
     QSizePolicy,
+    QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from src.core.connection_store import Connection
+from src.core.connection_store import Connection, Folder
 
 UNNAMED = "未命名"
+FOLDER_UNNAMED = "未命名目錄"
 NO_URL = "尚未設定網址"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
+_KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
 FOLDER = "folder"
 CONNECTION = "connection"
@@ -87,6 +92,14 @@ def _resolve_folder_drop(layout, uuid, target_kind, target_uuid, position) -> Mo
     return Move(FOLDER, uuid, None, others.index(target_uuid) + (0 if position == ABOVE else 1))
 
 
+def _uuid_of(item: QTreeWidgetItem | None) -> str | None:
+    return item.data(0, _UUID_ROLE) if item is not None else None
+
+
+def _kind_of(item: QTreeWidgetItem | None) -> str | None:
+    return item.data(0, _KIND_ROLE) if item is not None else None
+
+
 class ElidedLabel(QLabel):
     """單行標籤，文字過長時以 … 省略"""
 
@@ -122,8 +135,16 @@ class ConnectionItemWidget(QWidget):
         self.setToolTip(conn.url)
 
 
-class _ListView(QListWidget):
+_DROP_POSITIONS = {
+    QAbstractItemView.DropIndicatorPosition.AboveItem: ABOVE,
+    QAbstractItemView.DropIndicatorPosition.BelowItem: BELOW,
+    QAbstractItemView.DropIndicatorPosition.OnItem: ON,
+}
+
+
+class _TreeView(QTreeWidget):
     deletePressed = Signal()
+    itemDropped = Signal(object, object, str)  # 拖曳的項目、放下處的項目（None 為空白處）、ABOVE/BELOW/ON
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete:
@@ -131,50 +152,89 @@ class _ListView(QListWidget):
             return
         super().keyPressEvent(event)
 
+    def dropEvent(self, event):
+        indicator = self.dropIndicatorPosition()
+        target = self.itemAt(event.position().toPoint()) if indicator in _DROP_POSITIONS else None
+        # 不交給 Qt 搬移：忽略事件讓拖曳結果為 IgnoreAction，Qt 也就不會刪除來源項目；
+        # 實際移動由主視窗更新 store 後重建整棵樹
+        event.ignore()
+        self.viewport().update()
+        self.itemDropped.emit(self.currentItem(), target, _DROP_POSITIONS.get(indicator, ON))
+
 
 class ConnectionList(QWidget):
     selectionChanged = Signal(str)
     addRequested = Signal()
+    addFolderRequested = Signal()
     deleteRequested = Signal(str)
+    deleteFolderRequested = Signal(str)
+    folderRenamed = Signal(str, str)
+    folderExpandedChanged = Signal(str, bool)
+    connectionMoved = Signal(str, object, int)
+    folderMoved = Signal(str, int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._folder_names: dict[str, str] = {}
+        self._folder_expanded: dict[str, bool] = {}
+
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("搜尋連線")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.textChanged.connect(self._apply_filter)
 
-        self.list_view = _ListView()
-        self.list_view.setObjectName("ConnectionList")
-        self.list_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.list_view.customContextMenuRequested.connect(self._show_context_menu)
-        self.list_view.currentItemChanged.connect(self._on_current_changed)
-        self.list_view.deletePressed.connect(self._request_delete_current)
+        self.tree = _TreeView()
+        self.tree.setObjectName("ConnectionList")
+        self.tree.setHeaderHidden(True)
+        self.tree.setIndentation(14)
+        self.tree.setExpandsOnDoubleClick(False)
+        self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._show_context_menu)
+        self.tree.currentItemChanged.connect(self._on_current_changed)
+        self.tree.itemClicked.connect(self._on_item_clicked)
+        self.tree.itemChanged.connect(self._on_item_changed)
+        self.tree.itemExpanded.connect(lambda item: self._on_expansion_changed(item, True))
+        self.tree.itemCollapsed.connect(lambda item: self._on_expansion_changed(item, False))
+        self.tree.deletePressed.connect(self.request_delete_current)
+        self.tree.itemDropped.connect(self._on_item_dropped)
 
         self.add_button = QPushButton("+ 新增連線")
         self.add_button.setToolTip("新增連線 (F1)")
         self.add_button.clicked.connect(lambda: self.addRequested.emit())
+        self.add_folder_button = QPushButton("+ 新增目錄")
+        self.add_folder_button.clicked.connect(lambda: self.addFolderRequested.emit())
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
+        buttons.addWidget(self.add_button)
+        buttons.addWidget(self.add_folder_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         layout.addWidget(self.search_edit)
-        layout.addWidget(self.list_view, 1)
-        layout.addWidget(self.add_button)
+        layout.addWidget(self.tree, 1)
+        layout.addLayout(buttons)
 
-    def set_connections(self, connections: list[Connection], select_uuid: str | None = None) -> None:
-        self.list_view.blockSignals(True)
-        self.list_view.clear()
+    # ---------- 對外介面 ----------
+
+    def set_tree(self, folders: list[Folder], connections: list[Connection], select_uuid: str | None = None) -> None:
+        """依 store 資料重建整棵樹；選取 select_uuid，其次是重建前的目前項目，再其次是第一筆連線"""
+        previous = _uuid_of(self.tree.currentItem())
+        self._folder_names = {folder.uuid: folder.name for folder in folders}
+        self._folder_expanded = {folder.uuid: folder.expanded for folder in folders}
+        self.tree.blockSignals(True)
+        self.tree.clear()
+        parents = {folder.uuid: self._add_folder_item(folder) for folder in folders}
         for conn in connections:
-            item = QListWidgetItem()
-            item.setData(_UUID_ROLE, conn.uuid)
-            widget = ConnectionItemWidget(conn)
-            item.setSizeHint(QSize(0, widget.sizeHint().height()))
-            self.list_view.addItem(item)
-            self.list_view.setItemWidget(item, widget)
-        self.list_view.blockSignals(False)
+            self._add_connection_item(parents.get(conn.folder, self.tree.invisibleRootItem()), conn)
+        for folder in folders:
+            parents[folder.uuid].setExpanded(folder.expanded)
+        self.tree.blockSignals(False)
         self._apply_filter(self.search_edit.text())
-        target = select_uuid or (connections[0].uuid if connections else None)
+        first = connections[0].uuid if connections else None
+        target = next((uuid for uuid in (select_uuid, previous, first) if uuid and self._item_for(uuid)), None)
         if target:
             self.select(target)
 
@@ -182,64 +242,203 @@ class ConnectionList(QWidget):
         item = self._item_for(conn.uuid)
         if item is None:
             return
-        self.list_view.itemWidget(item).set_connection(conn)
+        self.tree.itemWidget(item, 0).set_connection(conn)
         self._apply_filter(self.search_edit.text())
 
     def select(self, uuid: str) -> None:
         item = self._item_for(uuid)
-        if item is not None:
-            self.list_view.setCurrentItem(item)
+        if item is None:
+            return
+        parent = item.parent()
+        if parent is not None and not parent.isExpanded():
+            parent.setExpanded(True)
+        self.tree.setCurrentItem(item)
 
     def current_uuid(self) -> str | None:
-        item = self.list_view.currentItem()
-        return item.data(_UUID_ROLE) if item is not None else None
+        item = self.tree.currentItem()
+        return _uuid_of(item) if _kind_of(item) == CONNECTION else None
+
+    def current_folder(self) -> str | None:
+        """選到目錄時回傳該目錄；選到連線時回傳其所屬目錄（最外層為 None）"""
+        item = self.tree.currentItem()
+        if _kind_of(item) == FOLDER:
+            return _uuid_of(item)
+        return _uuid_of(item.parent()) if item is not None else None
+
+    def edit_folder(self, uuid: str) -> None:
+        item = self._item_for(uuid)
+        if _kind_of(item) != FOLDER:
+            return
+        self.tree.setCurrentItem(item)
+        self.tree.editItem(item, 0)
+
+    def request_delete_current(self) -> None:
+        item = self.tree.currentItem()
+        if _kind_of(item) == FOLDER:
+            self.deleteFolderRequested.emit(_uuid_of(item))
+        elif _kind_of(item) == CONNECTION:
+            self.deleteRequested.emit(_uuid_of(item))
 
     def item_widget(self, uuid: str) -> ConnectionItemWidget | None:
         item = self._item_for(uuid)
-        return self.list_view.itemWidget(item) if item is not None else None
+        return self.tree.itemWidget(item, 0) if _kind_of(item) == CONNECTION else None
 
     def visible_uuids(self) -> list[str]:
+        """未被搜尋篩選掉的連線（依畫面順序，不含目錄）"""
         return [
-            self.list_view.item(row).data(_UUID_ROLE)
-            for row in range(self.list_view.count())
-            if not self.list_view.item(row).isHidden()
+            _uuid_of(item)
+            for item in self._iter_items()
+            if _kind_of(item) == CONNECTION
+            and not item.isHidden()
+            and not (item.parent() is not None and item.parent().isHidden())
         ]
 
     def clear_search(self) -> None:
         self.search_edit.clear()
 
     def set_busy(self, busy: bool) -> None:
-        self.list_view.setEnabled(not busy)
-        self.add_button.setEnabled(not busy)
+        for widget in (self.tree, self.add_button, self.add_folder_button):
+            widget.setEnabled(not busy)
 
-    def _item_for(self, uuid: str) -> QListWidgetItem | None:
-        for row in range(self.list_view.count()):
-            item = self.list_view.item(row)
-            if item.data(_UUID_ROLE) == uuid:
-                return item
-        return None
+    # ---------- 建立項目 ----------
+
+    def _add_folder_item(self, folder: Folder) -> QTreeWidgetItem:
+        item = QTreeWidgetItem(self.tree)
+        item.setData(0, _UUID_ROLE, folder.uuid)
+        item.setData(0, _KIND_ROLE, FOLDER)
+        item.setText(0, folder.name or FOLDER_UNNAMED)
+        item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+        return item
+
+    def _add_connection_item(self, parent: QTreeWidgetItem, conn: Connection) -> None:
+        item = QTreeWidgetItem(parent)
+        item.setData(0, _UUID_ROLE, conn.uuid)
+        item.setData(0, _KIND_ROLE, CONNECTION)
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)  # 連線不能當作放入目標
+        widget = ConnectionItemWidget(conn)
+        item.setSizeHint(0, QSize(0, widget.sizeHint().height()))
+        self.tree.setItemWidget(item, 0, widget)
+
+    # ---------- 查詢 ----------
+
+    def _iter_items(self):
+        root = self.tree.invisibleRootItem()
+        for row in range(root.childCount()):
+            top = root.child(row)
+            yield top
+            for child_row in range(top.childCount()):
+                yield top.child(child_row)
+
+    def _item_for(self, uuid: str) -> QTreeWidgetItem | None:
+        return next((item for item in self._iter_items() if _uuid_of(item) == uuid), None)
+
+    def _layout(self) -> TreeLayout:
+        folders, groups = [], {None: []}
+        root = self.tree.invisibleRootItem()
+        for row in range(root.childCount()):
+            item = root.child(row)
+            if _kind_of(item) == FOLDER:
+                folders.append(_uuid_of(item))
+                groups[_uuid_of(item)] = [_uuid_of(item.child(i)) for i in range(item.childCount())]
+            else:
+                groups[None].append(_uuid_of(item))
+        return TreeLayout(folders, groups)
+
+    def _searching(self) -> bool:
+        return bool(self.search_edit.text().strip())
+
+    def _matches(self, item: QTreeWidgetItem, keyword: str) -> bool:
+        widget = self.tree.itemWidget(item, 0)
+        return keyword in f"{widget.title.text()}\n{widget.subtitle.text()}".lower()
+
+    # ---------- 搜尋 ----------
 
     def _apply_filter(self, text: str) -> None:
         keyword = text.strip().lower()
-        for row in range(self.list_view.count()):
-            item = self.list_view.item(row)
-            widget = self.list_view.itemWidget(item)
-            haystack = f"{widget.title.text()}\n{widget.subtitle.text()}".lower()
-            item.setHidden(bool(keyword) and keyword not in haystack)
+        self.tree.setDragEnabled(not keyword)  # 篩選後的畫面位置與實際順序不對應
+        self.tree.blockSignals(True)  # 搜尋造成的展開／收合不算使用者操作
+        root = self.tree.invisibleRootItem()
+        for row in range(root.childCount()):
+            item = root.child(row)
+            if _kind_of(item) == FOLDER:
+                self._filter_folder(item, keyword)
+            else:
+                item.setHidden(bool(keyword) and not self._matches(item, keyword))
+        self.tree.blockSignals(False)
+
+    def _filter_folder(self, item: QTreeWidgetItem, keyword: str) -> None:
+        if not keyword:
+            item.setHidden(False)
+            for row in range(item.childCount()):
+                item.child(row).setHidden(False)
+            item.setExpanded(self._folder_expanded.get(_uuid_of(item), True))
+            return
+        folder_hit = keyword in item.text(0).lower()
+        any_visible = False
+        for row in range(item.childCount()):
+            child = item.child(row)
+            visible = folder_hit or self._matches(child, keyword)
+            child.setHidden(not visible)
+            any_visible = any_visible or visible
+        item.setHidden(not (folder_hit or any_visible))
+        item.setExpanded(True)
+
+    # ---------- 事件 ----------
 
     def _on_current_changed(self, current, _previous) -> None:
-        self.selectionChanged.emit(current.data(_UUID_ROLE) if current is not None else "")
+        self.selectionChanged.emit(_uuid_of(current) if _kind_of(current) == CONNECTION else "")
 
-    def _request_delete_current(self) -> None:
-        uuid = self.current_uuid()
-        if uuid:
-            self.deleteRequested.emit(uuid)
+    def _on_item_clicked(self, item, _column) -> None:
+        if _kind_of(item) == FOLDER:
+            item.setExpanded(not item.isExpanded())
+
+    def _on_expansion_changed(self, item, expanded: bool) -> None:
+        uuid = _uuid_of(item)
+        if _kind_of(item) != FOLDER or self._searching() or self._folder_expanded.get(uuid) == expanded:
+            return
+        self._folder_expanded[uuid] = expanded
+        self.folderExpandedChanged.emit(uuid, expanded)
+
+    def _on_item_changed(self, item, _column) -> None:
+        """清單內改名完成：去除前後空白，空白名稱還原為原名"""
+        if _kind_of(item) != FOLDER:
+            return
+        uuid = _uuid_of(item)
+        display = self._folder_names.get(uuid) or FOLDER_UNNAMED
+        name = item.text(0).strip()
+        if not name or name == display:
+            self._set_folder_text(item, display)
+            return
+        self._set_folder_text(item, name)
+        self._folder_names[uuid] = name
+        self.folderRenamed.emit(uuid, name)
+        self._apply_filter(self.search_edit.text())
+
+    def _set_folder_text(self, item: QTreeWidgetItem, text: str) -> None:
+        if item.text(0) != text:
+            self.tree.blockSignals(True)
+            item.setText(0, text)
+            self.tree.blockSignals(False)
+
+    def _on_item_dropped(self, dragged, target, position: str) -> None:
+        if dragged is None:
+            return
+        move = resolve_drop(
+            self._layout(), _kind_of(dragged), _uuid_of(dragged), _kind_of(target), _uuid_of(target), position
+        )
+        if move is None:
+            return
+        if move.kind == FOLDER:
+            self.folderMoved.emit(move.uuid, move.index)
+        else:
+            self.connectionMoved.emit(move.uuid, move.folder, move.index)
 
     def _show_context_menu(self, pos) -> None:
-        item = self.list_view.itemAt(pos)
-        if item is None:
+        item = self.tree.itemAt(pos)
+        if _kind_of(item) != CONNECTION:
             return
         menu = QMenu(self)
         delete_action = menu.addAction("刪除")
-        if menu.exec(self.list_view.viewport().mapToGlobal(pos)) is delete_action:
-            self.deleteRequested.emit(item.data(_UUID_ROLE))
+        if menu.exec(self.tree.viewport().mapToGlobal(pos)) is delete_action:
+            self.deleteRequested.emit(_uuid_of(item))

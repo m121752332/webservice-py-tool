@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
     def _build_shortcuts(self) -> None:
         for key, handler in (
             ("F1", self._on_add_requested),
-            ("F2", self._on_delete_current),
+            ("F2", self.connection_list.request_delete_current),
             ("F3", self.load_button.click),
             ("F5", self.run_button.click),
             ("F6", self._on_clear),
@@ -280,6 +280,10 @@ class MainWindow(QMainWindow):
 
     # ---------- 連線資料 ----------
 
+    def _refresh_tree(self, select_uuid: str | None = None) -> None:
+        """store 結構變動後重建左側清單；未指定 select_uuid 時保留目前選取"""
+        self.connection_list.set_tree(self._store.folders(), self._store.all(), select_uuid)
+
     def _load_initial_connections(self) -> None:
         if self._store.recovered_from_corruption:
             self._notify("warning", f"連線設定檔無法讀取，已備份為 {self._store.backup_path.name} 並重新建立")
@@ -287,7 +291,7 @@ class MainWindow(QMainWindow):
             self._store.add()
             if not self._store.recovered_from_corruption:
                 self._notify("info", "請輸入配置名稱與 WSDL 網址（結尾加上 ?WSDL），再按「讀取 WSDL」")
-        self.connection_list.set_connections(self._store.all())
+        self._refresh_tree()
 
     def _current_connection(self) -> Connection | None:
         return self._store.get(self._current_uuid) if self._current_uuid else None
@@ -337,12 +341,8 @@ class MainWindow(QMainWindow):
         self._commit_fields()
         conn = self._store.add()
         self.connection_list.clear_search()  # 避免新連線被搜尋篩選隱藏卻又被選取
-        self.connection_list.set_connections(self._store.all(), select_uuid=conn.uuid)
+        self._refresh_tree(conn.uuid)
         self.name_edit.setFocus()
-
-    def _on_delete_current(self) -> None:
-        if self._current_uuid:
-            self._on_delete_requested(self._current_uuid)
 
     @Slot(str)
     def _on_delete_requested(self, uuid: str) -> None:
@@ -358,7 +358,7 @@ class MainWindow(QMainWindow):
         self._store.remove(uuid)
         if not self._store.all():
             self._store.add()
-        self.connection_list.set_connections(self._store.all(), select_uuid=keep)
+        self._refresh_tree(keep)
         self._notify("success", "已刪除連線")
 
     # ---------- 背景讀取與執行 ----------

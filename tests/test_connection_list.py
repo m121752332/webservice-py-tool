@@ -2,10 +2,12 @@
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QAbstractItemView
 
-from src.core.connection_store import Connection
+from src.core.connection_store import Connection, Folder
 from src.ui.connection_list import (
-    ABOVE, BELOW, CONNECTION, FOLDER, NO_URL, ON, UNNAMED, ConnectionList, Move, TreeLayout, resolve_drop,
+    ABOVE, BELOW, CONNECTION, FOLDER, FOLDER_UNNAMED, NO_URL, ON, UNNAMED, ConnectionList, Move, TreeLayout,
+    resolve_drop,
 )
 
 CONNECTIONS = [
@@ -19,7 +21,7 @@ def make_list(select=None):
     widget = ConnectionList()
     received = []
     widget.selectionChanged.connect(received.append)
-    widget.set_connections(CONNECTIONS, select_uuid=select)
+    widget.set_tree([], CONNECTIONS, select_uuid=select)
     return widget, received
 
 
@@ -70,7 +72,7 @@ def test_delete_key_requests_delete_of_current(qapp):
     widget, _ = make_list("u2")
     requested = []
     widget.deleteRequested.connect(requested.append)
-    QTest.keyClick(widget.list_view, Qt.Key.Key_Delete)
+    QTest.keyClick(widget.tree, Qt.Key.Key_Delete)
     assert requested == ["u2"]
 
 
@@ -85,9 +87,11 @@ def test_add_button_emits_add_requested(qapp):
 def test_set_busy_disables_interaction(qapp):
     widget, _ = make_list()
     widget.set_busy(True)
-    assert not widget.list_view.isEnabled() and not widget.add_button.isEnabled()
+    assert not widget.tree.isEnabled()
+    assert not widget.add_button.isEnabled() and not widget.add_folder_button.isEnabled()
     widget.set_busy(False)
-    assert widget.list_view.isEnabled() and widget.add_button.isEnabled()
+    assert widget.tree.isEnabled()
+    assert widget.add_button.isEnabled() and widget.add_folder_button.isEnabled()
 
 
 def test_clear_search_shows_all_rows(qapp):
@@ -99,9 +103,9 @@ def test_clear_search_shows_all_rows(qapp):
     assert widget.visible_uuids() == ["u1", "u2", "u3"]
 
 
-def test_set_connections_empty(qapp):
+def test_set_tree_empty(qapp):
     widget, _ = make_list()
-    widget.set_connections([])
+    widget.set_tree([], [])
     assert widget.current_uuid() is None
     assert widget.visible_uuids() == []
 
@@ -145,3 +149,179 @@ def test_resolve_drop(kind, uuid, target_kind, target_uuid, position, expected):
 ])
 def test_resolve_drop_onto_itself_is_ignored(kind, uuid, target_kind, target_uuid, position):
     assert resolve_drop(LAYOUT, kind, uuid, target_kind, target_uuid, position) is None
+
+
+FOLDERS = [Folder("f1", "TIPTOP", True), Folder("f2", "", False)]
+TREE = [
+    Connection("u1", "正式區", "http://prod/ws?WSDL", [], "f1"),
+    Connection("u2", "測試區", "http://test/ws?WSDL", []),
+    Connection("u4", "報表", "http://report/ws?WSDL", [], "f2"),
+    Connection("u5", "備援", "http://backup/ws?WSDL", [], "f1"),
+]
+
+
+def make_tree(select=None):
+    widget = ConnectionList()
+    received = []
+    widget.selectionChanged.connect(received.append)
+    widget.set_tree(FOLDERS, TREE, select_uuid=select)
+    return widget, received
+
+
+def top_level(widget):
+    return [widget.tree.topLevelItem(i) for i in range(widget.tree.topLevelItemCount())]
+
+
+def uuid_of(item):
+    return item.data(0, Qt.ItemDataRole.UserRole)
+
+
+def child_uuids(item):
+    return [uuid_of(item.child(i)) for i in range(item.childCount())]
+
+
+def folder_item(widget, folder_uuid):
+    return next(item for item in top_level(widget) if uuid_of(item) == folder_uuid)
+
+
+def record(signal):
+    calls = []
+    signal.connect(lambda *args: calls.append(args))
+    return calls
+
+
+def test_tree_places_folders_first_and_connections_inside(qapp):
+    widget, received = make_tree()
+    items = top_level(widget)
+    assert [uuid_of(item) for item in items] == ["f1", "f2", "u2"]
+    assert child_uuids(items[0]) == ["u1", "u5"]
+    assert child_uuids(items[1]) == ["u4"]
+    assert (items[0].text(0), items[1].text(0)) == ("TIPTOP", FOLDER_UNNAMED)
+    assert items[0].isExpanded() and not items[1].isExpanded()
+    assert widget.current_uuid() == "u1"
+    assert received == ["u1"]
+
+
+def test_selecting_folder_emits_blank_and_reports_current_folder(qapp):
+    widget, received = make_tree()
+    widget.select("f1")
+    assert received[-1] == ""
+    assert widget.current_uuid() is None
+    assert widget.current_folder() == "f1"
+    widget.select("u5")
+    assert widget.current_folder() == "f1"
+    widget.select("u2")
+    assert widget.current_folder() is None
+
+
+def test_selecting_connection_in_collapsed_folder_expands_it(qapp):
+    widget, _ = make_tree()
+    changes = record(widget.folderExpandedChanged)
+    widget.select("u4")
+    assert folder_item(widget, "f2").isExpanded()
+    assert changes == [("f2", True)]
+
+
+def test_set_tree_keeps_current_selection(qapp):
+    widget, _ = make_tree("u2")
+    widget.set_tree(FOLDERS, TREE)
+    assert widget.current_uuid() == "u2"
+    widget.select("f1")
+    widget.set_tree(FOLDERS, TREE)
+    assert widget.current_folder() == "f1" and widget.current_uuid() is None
+
+
+def test_clicking_folder_toggles_and_reports(qapp):
+    widget, _ = make_tree()
+    changes = record(widget.folderExpandedChanged)
+    item = folder_item(widget, "f1")
+    widget.tree.itemClicked.emit(item, 0)
+    assert not item.isExpanded()
+    widget.tree.itemClicked.emit(item, 0)
+    assert item.isExpanded()
+    assert changes == [("f1", False), ("f1", True)]
+
+
+def test_rename_folder_emits_trimmed_name(qapp):
+    widget, _ = make_tree()
+    renamed = record(widget.folderRenamed)
+    item = folder_item(widget, "f1")
+    item.setText(0, "  ERP  ")
+    assert item.text(0) == "ERP"
+    assert renamed == [("f1", "ERP")]
+
+
+def test_blank_rename_restores_previous_name(qapp):
+    widget, _ = make_tree()
+    renamed = record(widget.folderRenamed)
+    folder_item(widget, "f1").setText(0, "   ")
+    folder_item(widget, "f2").setText(0, "")
+    assert folder_item(widget, "f1").text(0) == "TIPTOP"
+    assert folder_item(widget, "f2").text(0) == FOLDER_UNNAMED
+    assert renamed == []
+
+
+def test_edit_folder_starts_inline_editing(qapp):
+    widget, _ = make_tree()
+    widget.edit_folder("f2")
+    assert widget.current_folder() == "f2"
+    assert widget.tree.state() == QAbstractItemView.State.EditingState
+
+
+def test_filter_shows_matching_connection_under_its_folder(qapp):
+    widget, _ = make_tree()
+    changes = record(widget.folderExpandedChanged)
+    widget.search_edit.setText("REPORT")
+    assert widget.visible_uuids() == ["u4"]
+    assert folder_item(widget, "f1").isHidden()
+    assert not folder_item(widget, "f2").isHidden()
+    assert folder_item(widget, "f2").isExpanded()
+    widget.search_edit.setText("")
+    assert widget.visible_uuids() == ["u1", "u5", "u4", "u2"]
+    assert not folder_item(widget, "f2").isExpanded()
+    assert changes == []
+
+
+def test_filter_by_folder_name_shows_all_its_connections(qapp):
+    widget, _ = make_tree()
+    widget.search_edit.setText("tiptop")
+    assert widget.visible_uuids() == ["u1", "u5"]
+
+
+def test_search_disables_drag(qapp):
+    widget, _ = make_tree()
+    assert widget.tree.dragEnabled()
+    widget.search_edit.setText("prod")
+    assert not widget.tree.dragEnabled()
+    widget.clear_search()
+    assert widget.tree.dragEnabled()
+
+
+def test_delete_key_on_folder_requests_folder_delete(qapp):
+    widget, _ = make_tree()
+    widget.select("f2")
+    folders, connections = [], []
+    widget.deleteFolderRequested.connect(folders.append)
+    widget.deleteRequested.connect(connections.append)
+    QTest.keyClick(widget.tree, Qt.Key.Key_Delete)
+    assert folders == ["f2"] and connections == []
+
+
+def test_add_folder_button_emits(qapp):
+    widget, _ = make_tree()
+    requested = []
+    widget.addFolderRequested.connect(lambda: requested.append(True))
+    widget.add_folder_button.click()
+    assert requested == [True]
+
+
+def test_drop_emits_move_signals(qapp):
+    widget, _ = make_tree()
+    moved_connections = record(widget.connectionMoved)
+    moved_folders = record(widget.folderMoved)
+    items = top_level(widget)
+    widget.tree.itemDropped.emit(items[2], items[0], ON)  # u2 放到 TIPTOP 上
+    widget.tree.itemDropped.emit(items[1], items[0], ABOVE)  # 未命名目錄移到 TIPTOP 前
+    widget.tree.itemDropped.emit(items[2], items[2], ABOVE)  # 放回自己身上
+    assert moved_connections == [("u2", "f1", 2)]
+    assert moved_folders == [("f2", 0)]
