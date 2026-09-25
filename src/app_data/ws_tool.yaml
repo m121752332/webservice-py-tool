@@ -2,9 +2,9 @@ app:
   # Name of the application
   name: "TIPTOP WebService Tool"
   # Version of the application
-  version: "v2.0.0"
+  version: "v3.0.0"
   # Description of the application
-  copyright: "Copyright 2024 GameStudio. All rights reserved."
+  copyright: "Copyright 2026 GameStudio. All rights reserved."
   # APP icon location
   img: "assets/app_icon.ico"
   # APP loading timeout value (seconds)
