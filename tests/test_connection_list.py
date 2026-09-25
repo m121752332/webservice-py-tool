@@ -87,6 +87,15 @@ def test_set_busy_disables_interaction(qapp):
     assert widget.list_view.isEnabled() and widget.add_button.isEnabled()
 
 
+def test_clear_search_shows_all_rows(qapp):
+    widget, _ = make_list()
+    widget.search_edit.setText("PROD")
+    assert widget.visible_uuids() == ["u1"]
+    widget.clear_search()
+    assert widget.search_edit.text() == ""
+    assert widget.visible_uuids() == ["u1", "u2", "u3"]
+
+
 def test_set_connections_empty(qapp):
     widget, _ = make_list()
     widget.set_connections([])

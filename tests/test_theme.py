@@ -73,6 +73,17 @@ def test_switch_back_to_light(qapp, settings):
     assert LIGHT.bg in qapp.styleSheet()
 
 
+def test_dark_to_system_emits_theme_changed_once(qapp, settings):
+    # unsetColorScheme() 可能觸發 colorSchemeChanged，set_mode 應在切換期間抑制重複刷新
+    manager = ThemeManager(qapp, settings)
+    manager.apply()
+    manager.set_mode(ThemeMode.DARK)
+    received = []
+    manager.themeChanged.connect(received.append)
+    manager.set_mode(ThemeMode.SYSTEM)
+    assert len(received) == 1
+
+
 def test_invalid_stored_mode_falls_back_to_system(qapp, settings):
     settings.setValue("ui/theme", "purple")
     assert ThemeManager(qapp, settings).mode is ThemeMode.SYSTEM

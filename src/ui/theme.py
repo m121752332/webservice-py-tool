@@ -213,6 +213,7 @@ class ThemeManager(QObject):
         except ValueError:
             self._mode = ThemeMode.SYSTEM
         self._palette = LIGHT
+        self._in_set_mode = False
         self._hints = QGuiApplication.styleHints()
         self._hints.colorSchemeChanged.connect(self._on_system_scheme_changed)
 
@@ -240,7 +241,11 @@ class ThemeManager(QObject):
         self._mode = mode
         self._settings.setValue(SETTINGS_KEY, mode.value)
         self._settings.sync()
-        self._apply_scheme_override()
+        self._in_set_mode = True
+        try:
+            self._apply_scheme_override()
+        finally:
+            self._in_set_mode = False
         self._refresh()
 
     def _apply_scheme_override(self) -> None:
@@ -253,6 +258,8 @@ class ThemeManager(QObject):
             self._hints.unsetColorScheme()
 
     def _on_system_scheme_changed(self, _scheme) -> None:
+        if self._in_set_mode:
+            return  # set_mode 會自行呼叫 _refresh，避免 unsetColorScheme() 觸發的訊號重複刷新
         if self._mode is ThemeMode.SYSTEM:
             self._refresh()
 

@@ -29,6 +29,15 @@ def _new_uuid() -> str:
     return str(uuidutil.get_uuid())
 
 
+def _parse_methods(method) -> list[str]:
+    """method 欄位必須是清單；其他型別（例如舊版損毀寫入的字串）視為檔案損毀"""
+    if method is None:
+        return []
+    if not isinstance(method, list):
+        raise TypeError(f"method 欄位型別錯誤：{type(method).__name__}")
+    return list(method)
+
+
 class ConnectionStore:
     """連線配置的新增、刪除、修改，每次修改立即寫回檔案"""
 
@@ -94,7 +103,7 @@ class ConnectionStore:
                     uuid=item.get("uuid") or "",
                     name=item.get("name") or "",
                     url=item.get("url") or "",
-                    methods=list(item.get("method") or []),
+                    methods=_parse_methods(item.get("method")),
                 )
                 for item in data["connections"]
             ]

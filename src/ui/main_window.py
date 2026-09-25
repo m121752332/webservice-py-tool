@@ -35,6 +35,7 @@ from src.ui.xml_editor import XmlEditor
 XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
 TIMEOUT_MIN = 5
 TIMEOUT_MAX = 120
+LOG_TEXT_CAP = 2000
 LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
@@ -55,6 +56,13 @@ def format_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KB"
     return f"{size / 1024 / 1024:.1f} MB"
+
+
+def _cap(text: str) -> str:
+    """記錄檔用：避免超長內容把 run.log 灌爆"""
+    if len(text) <= LOG_TEXT_CAP:
+        return text
+    return text[:LOG_TEXT_CAP] + f"…（已截斷，共 {len(text)} 字元）"
 
 
 def _button(text: str, variant: str | None = None, tooltip: str = "") -> QPushButton:
@@ -328,6 +336,7 @@ class MainWindow(QMainWindow):
             return
         self._commit_fields()
         conn = self._store.add()
+        self.connection_list.clear_search()  # 避免新連線被搜尋篩選隱藏卻又被選取
         self.connection_list.set_connections(self._store.all(), select_uuid=conn.uuid)
         self.name_edit.setFocus()
 
@@ -381,8 +390,10 @@ class MainWindow(QMainWindow):
             self._notify("warning", "請選擇服務方法（可先按「讀取 WSDL」取得清單）")
             return
         self.response_editor.clear()
-        self._start("run", self._service.call, url, method,
-                    self.request_editor.toPlainText(), self.timeout_spin.value())
+        params = self.request_editor.toPlainText()
+        logger.info("執行請求 · URL={} · 方法={} · 參數={}", url, method, _cap(params))
+        self._run_context = (url, method)
+        self._start("run", self._service.call, url, method, params, self.timeout_spin.value())
 
     def _start(self, kind: str, fn, *args) -> None:
         self._seq += 1
@@ -451,6 +462,11 @@ class MainWindow(QMainWindow):
         self._notify("success", f"已讀取 {len(methods)} 個服務方法")
 
     def _on_call_finished(self, result: CallResult) -> None:
+        url, method = getattr(self, "_run_context", ("", ""))
+        logger.info(
+            "請求完成 · URL={} · 方法={} · 耗時={:.2f}s · 大小={} · 回應={}",
+            url, method, result.elapsed, result.size, _cap(result.text),
+        )
         self.response_editor.setPlainText(result.text)
         self._set_status("success", "● 成功", f"{result.elapsed:.2f} s · {format_size(result.size)}")
 

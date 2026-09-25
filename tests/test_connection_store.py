@@ -121,6 +121,18 @@ def test_reads_repo_profile_copy(tmp_path):
     assert all(conn.uuid for conn in store.all())
 
 
+def test_string_method_is_treated_as_corrupt(tmp_path):
+    path = tmp_path / "connections.profile"
+    path.write_text(
+        json.dumps({"connections": [{"uuid": "u", "name": "", "url": "", "method": "abc"}]}),
+        encoding="utf-8",
+    )
+    store = ConnectionStore(path)
+    assert store.recovered_from_corruption is True
+    assert store.all() == []
+    assert read_json(path) == {"connections": []}
+
+
 def test_blank_uuid_gets_generated(tmp_path):
     path = tmp_path / "connections.profile"
     path.write_text(json.dumps({"connections": [{"uuid": "", "name": "a", "url": "u", "method": []}]}), encoding="utf-8")

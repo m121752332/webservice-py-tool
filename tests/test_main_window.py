@@ -3,7 +3,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QSettings, QThreadPool
+from PySide6.QtCore import QSettings
 from PySide6.QtGui import QGuiApplication
 
 from src.core.connection_store import ConnectionStore
@@ -152,6 +152,17 @@ def test_add_creates_and_selects(env):
     assert len(connections) == 2
     assert window.connection_list.current_uuid() == connections[1].uuid
     assert window.name_edit.text() == ""
+
+
+def test_add_with_active_search_filter_selects_visible_row(env):
+    seed(env.store, "正式區")
+    window = env.make()
+    window.connection_list.search_edit.setText("找不到的關鍵字")
+    window.connection_list.add_button.click()
+    new_uuid = window.connection_list.current_uuid()
+    assert new_uuid is not None
+    assert new_uuid in window.connection_list.visible_uuids()
+    assert window.connection_list.search_edit.text() == ""
 
 
 def test_delete_confirmed_removes_and_keeps_other_selected(env):
@@ -373,9 +384,10 @@ def test_cancel_ignores_late_result(env):
     assert window.run_button.text() == RUN_LABEL
     assert window.load_button.isEnabled()
     assert window.status_state.text() == "已取消"
+    task = next(iter(window._tasks.values()))
     env.service.gate.set()
-    QThreadPool.globalInstance().waitForDone(3000)
-    QCoreApplication.processEvents()
+    task.join(3)
+    wait_until(lambda: not window._tasks)
     assert window.response_editor.toPlainText() == ""
     assert window.status_state.text() == "已取消"
 
@@ -386,9 +398,10 @@ def test_cancel_load(env):
     window = env.make()
     window.load_button.click()
     assert window.load_button.text() == CANCEL_LABEL
+    task = next(iter(window._tasks.values()))
     window.load_button.click()
     env.service.gate.set()
-    QThreadPool.globalInstance().waitForDone(3000)
-    QCoreApplication.processEvents()
+    task.join(3)
+    wait_until(lambda: not window._tasks)
     assert env.store.get(uuid).methods == []
     assert window.load_button.text() == LOAD_LABEL

@@ -9,11 +9,11 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 * PyInstaller 6.22
 
 ## 開發說明
-1. 安裝依賴：`$ uv sync`（或 `$ pip install -r requirements.txt`，此檔由 `uv export --format requirements-txt --no-hashes --no-emit-project -o requirements.txt` 產生）
+1. 安裝依賴：`$ uv sync`（或 `$ pip install -r requirements.txt`，此檔由 `uv export --format requirements-txt --no-hashes --no-emit-project --no-dev -o requirements.txt` 產生）
 2. 啟動程式：`$ uv run python src/ws_tool.py`
 3. 執行測試：`$ uv run pytest`
 4. UI 檢測工具（類似瀏覽器的「檢查元素」）：`$ uv run python -m PyQtInspect --direct --file src/ws_tool.py`
-5. 打包 exe：執行根目錄的 `build.bat`，完成後會在 `dist` 目錄產生 `WebService-Tool.exe`
+5. 打包 exe：執行根目錄的 `build.bat`，完成後會在 `dist` 目錄產生 `WebService-Tool.exe`；散布時務必把 `app_data/`（含 `ws_tool.yaml`、`connections.profile`）資料夾與 exe 放在同一層目錄（工作目錄），如 `dist/app_data` 這樣的結構，否則程式找不到設定與連線資料
 6. 暫時不支持mac環境打包，如果有想法也可以自己去找到合適的配套方案
 
 ## 介面

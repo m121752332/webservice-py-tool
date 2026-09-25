@@ -141,6 +141,9 @@ class ConnectionList(QWidget):
             if not self.list_view.item(row).isHidden()
         ]
 
+    def clear_search(self) -> None:
+        self.search_edit.clear()
+
     def set_busy(self, busy: bool) -> None:
         self.list_view.setEnabled(not busy)
         self.add_button.setEnabled(not busy)
