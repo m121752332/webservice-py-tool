@@ -4,7 +4,7 @@
 """
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QModelIndex, QSize, Qt, Signal
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -26,6 +26,7 @@ from src.core.connection_store import Connection, Folder
 UNNAMED = "未命名"
 FOLDER_UNNAMED = "未命名目錄"
 NO_URL = "尚未設定網址"
+ROOT_LABEL = "最外層"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
 _KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
@@ -435,10 +436,44 @@ class ConnectionList(QWidget):
             self.connectionMoved.emit(move.uuid, move.folder, move.index)
 
     def _show_context_menu(self, pos) -> None:
-        item = self.tree.itemAt(pos)
-        if _kind_of(item) != CONNECTION:
-            return
+        menu = self._context_menu(self.tree.itemAt(pos))
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
+        menu.deleteLater()
+
+    def _context_menu(self, item: QTreeWidgetItem | None) -> QMenu:
         menu = QMenu(self)
-        delete_action = menu.addAction("刪除")
-        if menu.exec(self.tree.viewport().mapToGlobal(pos)) is delete_action:
-            self.deleteRequested.emit(_uuid_of(item))
+        uuid = _uuid_of(item)
+        if _kind_of(item) == CONNECTION:
+            self._fill_connection_menu(menu, uuid, _uuid_of(item.parent()))
+        elif _kind_of(item) == FOLDER:
+            menu.addAction("新增連線到此目錄").triggered.connect(lambda: self._add_into(uuid))
+            menu.addAction("重新命名").triggered.connect(lambda: self.edit_folder(uuid))
+            menu.addSeparator()
+            menu.addAction("刪除目錄").triggered.connect(lambda: self.deleteFolderRequested.emit(uuid))
+        else:
+            menu.addAction("新增連線").triggered.connect(lambda: self._add_into(None))
+            menu.addAction("新增目錄").triggered.connect(lambda: self.addFolderRequested.emit())
+        return menu
+
+    def _fill_connection_menu(self, menu: QMenu, uuid: str, here: str | None) -> None:
+        layout = self._layout()
+        move_menu = menu.addMenu("移動到")
+        targets = [(None, ROOT_LABEL)] + [
+            (folder, self._folder_names.get(folder) or FOLDER_UNNAMED) for folder in layout.folders
+        ]
+        for folder, label in targets:
+            action = move_menu.addAction(label)
+            action.setEnabled(folder != here)
+            action.triggered.connect(
+                lambda _checked=False, target=folder: self.connectionMoved.emit(uuid, target, len(layout.groups[target]))
+            )
+        menu.addSeparator()
+        menu.addAction("刪除").triggered.connect(lambda: self.deleteRequested.emit(uuid))
+
+    def _add_into(self, folder: str | None) -> None:
+        """先選取目標目錄（None 為取消選取，即最外層）再要求新增，主視窗依 current_folder() 決定位置"""
+        if folder is None:
+            self.tree.setCurrentIndex(QModelIndex())
+        else:
+            self.select(folder)
+        self.addRequested.emit()

@@ -325,3 +325,61 @@ def test_drop_emits_move_signals(qapp):
     widget.tree.itemDropped.emit(items[2], items[2], ABOVE)  # 放回自己身上
     assert moved_connections == [("u2", "f1", 2)]
     assert moved_folders == [("f2", 0)]
+
+
+def actions_by_text(menu):
+    return {action.text(): action for action in menu.actions() if action.text()}
+
+
+def test_connection_menu_moves_into_folder(qapp):
+    widget, _ = make_tree()
+    moved = record(widget.connectionMoved)
+    actions = actions_by_text(widget._context_menu(top_level(widget)[2]))  # u2 在最外層
+    assert list(actions) == ["移動到", "刪除"]
+    targets = actions_by_text(actions["移動到"].menu())
+    assert list(targets) == ["最外層", "TIPTOP", FOLDER_UNNAMED]
+    assert not targets["最外層"].isEnabled()
+    targets["TIPTOP"].trigger()
+    assert moved == [("u2", "f1", 2)]
+
+
+def test_connection_menu_moves_to_root_and_deletes(qapp):
+    widget, _ = make_tree()
+    moved = record(widget.connectionMoved)
+    deleted = []
+    widget.deleteRequested.connect(deleted.append)
+    actions = actions_by_text(widget._context_menu(folder_item(widget, "f1").child(0)))  # u1
+    targets = actions_by_text(actions["移動到"].menu())
+    assert not targets["TIPTOP"].isEnabled()
+    targets["最外層"].trigger()
+    actions["刪除"].trigger()
+    assert moved == [("u1", None, 1)]
+    assert deleted == ["u1"]
+
+
+def test_folder_menu_actions(qapp):
+    widget, _ = make_tree("u2")
+    added, deleted = [], []
+    widget.addRequested.connect(lambda: added.append(widget.current_folder()))
+    widget.deleteFolderRequested.connect(deleted.append)
+    actions = actions_by_text(widget._context_menu(folder_item(widget, "f2")))
+    assert list(actions) == ["新增連線到此目錄", "重新命名", "刪除目錄"]
+    actions["新增連線到此目錄"].trigger()
+    assert added == ["f2"]
+    actions["重新命名"].trigger()
+    assert widget.tree.state() == QAbstractItemView.State.EditingState
+    actions["刪除目錄"].trigger()
+    assert deleted == ["f2"]
+
+
+def test_blank_area_menu_actions(qapp):
+    widget, _ = make_tree("u1")
+    added, folders = [], []
+    widget.addRequested.connect(lambda: added.append((widget.current_uuid(), widget.current_folder())))
+    widget.addFolderRequested.connect(lambda: folders.append(True))
+    actions = actions_by_text(widget._context_menu(None))
+    assert list(actions) == ["新增連線", "新增目錄"]
+    actions["新增連線"].trigger()
+    actions["新增目錄"].trigger()
+    assert added == [(None, None)]
+    assert folders == [True]
