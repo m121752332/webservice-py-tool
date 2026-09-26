@@ -106,7 +106,7 @@ class LogBuffer:
 - **等級切換鈕**：四個 checkable `QPushButton`（`variant="level"`，`level` 屬性對應 QSS 顏色），文字為「等級 ＋ 目前暫存中的筆數」。預設只開 DEBUG、INFO 時，WARNING/ERROR 的筆數仍會顯示，使用者看得出有被隱藏的錯誤
 - **搜尋框**：`QLineEdit`，含清除鈕；輸入後延遲 200 ms 重新篩選（避免每打一個字就重建）；比對 `message` 與等級文字，不分大小寫
 - **文字區**：`QPlainTextEdit`（objectName `ConsoleView`），不使用 `setMaximumBlockCount`（一筆 traceback 佔多行，以行數限制會切壞記錄），由面板自己保存記錄清單，超過 `DEFAULT_CAPACITY` 的 110% 時一次修剪回 `DEFAULT_CAPACITY` 筆並重建文字區（分批修剪，避免每筆新記錄都重建）；每行格式 `HH:MM:SS.mmm  LEVEL    訊息`，多行訊息（traceback）後續行縮排
-- **上色**：以 `QTextCharFormat` 依等級上色，顏色取自主題色票——DEBUG `text_muted`、INFO `text`、WARNING `warning`、ERROR `danger`；主題切換時 `set_palette()` 重新上色（重建內容）
+- **上色**：以 `QTextCharFormat` 分段上色，顏色取自主題色票（見 §6.1）——時間 `text_muted`；等級欄位粗體、用該等級的 `fg`；訊息 DEBUG `text_muted`、INFO `text`、WARNING／ERROR 用該等級的 `fg`；主題切換時 `set_palette()` 重新上色（重建內容）
 - **自動捲動**：新增記錄前捲軸在最底端才跟著捲到底；使用者往上捲查看時保持位置
 - **篩選／搜尋變更**：以面板自己保存的記錄清單重新產生文字區內容
 - **清除**：清空面板與 `LogBuffer`（關掉再開不會跑回來）
@@ -167,9 +167,42 @@ class ConsolePanel(QWidget):
 - `theme.py` 新增 QSS（顏色一律用色票變數）：
   - `QWidget#ConsolePanel { background: $surface; border-top: 1px solid $border; }`
   - `QPlainTextEdit#ConsoleView`：無外框、等寬字型（`Cascadia Mono`、`Consolas`）
-  - `QPushButton[variant="level"]`：小尺寸膠囊；`:checked` 時底色 `$surface_hover`、外框用對應等級色（`level="WARNING"` → `$warning`，`ERROR` → `$danger`，其餘 `$accent`）；未勾選時文字 `$text_muted`
+  - `QPushButton[variant="level"]`：膠囊形（`border-radius: 11px`、`padding: 2px 10px`、9pt 粗體），各等級顏色見 §6.1
   - `QPushButton[variant="footer"]:checked { border-color: $accent; background: $surface_hover; }`
 - 側欄寬 260 px，三顆 footer 按鈕（圖示 20 px ＋ 2～3 個中文字）可排在同一列；若實測超出，改縮小按鈕左右 padding，不改側欄寬度
+
+### 6.1 等級配色
+
+每個等級有固定的色相，讓人一眼分辨：DEBUG 灰藍（slate）、INFO 藍、WARNING 琥珀、ERROR 紅。淺色主題用較深的色階（白底上對比 ≥ 4.5:1），深色主題用較亮的色階（深底上清楚，按鈕上的字改用深色）。
+
+| 等級 | 淺色 `fg` | 淺色 `hover` | 淺色 `on` | 深色 `fg` | 深色 `hover` | 深色 `on` |
+|---|---|---|---|---|---|---|
+| DEBUG | `#64748B` | `#475569` | `#FFFFFF` | `#94A3B8` | `#CBD5E1` | `#0F172A` |
+| INFO | `#2563EB` | `#1D4ED8` | `#FFFFFF` | `#60A5FA` | `#93C5FD` | `#0B1B33` |
+| WARNING | `#B45309` | `#92400E` | `#FFFFFF` | `#FBBF24` | `#FCD34D` | `#1F1300` |
+| ERROR | `#DC2626` | `#B91C1C` | `#FFFFFF` | `#F87171` | `#FCA5A5` | `#2A0A0A` |
+
+- `fg`：主色。勾選按鈕的底色、未勾選按鈕的文字色、記錄行的等級欄位色
+- `hover`：勾選按鈕滑鼠移入時的底色
+- `on`：勾選按鈕（實心底）上的文字色
+- WARNING 淺色不用常見的 `#D97706`：白字在上面對比只有約 3.2:1，改用 `#B45309`（約 5:1）
+
+**按鈕狀態**（兩個狀態都有該等級的底色，靠「實心 vs 淡色」區分開關）
+
+| 狀態 | 底色 | 文字 | 外框 |
+|---|---|---|---|
+| 勾選（顯示中） | `fg` 實心 | `on` | `fg` |
+| 勾選＋懸浮 | `hover` | `on` | `hover` |
+| 未勾選（隱藏中） | `fg` 淡色（淺色 α 0.12／深色 α 0.16） | `fg` | `fg` 半透明（淺色 α 0.35／深色 α 0.45） |
+| 未勾選＋懸浮 | `fg` 淡色加深（淺色 α 0.24／深色 α 0.30） | `fg` | `fg` |
+
+**實作方式**
+
+- `theme.py` 新增 `LevelColor(fg, hover, on)` 與 `LevelColors(debug, info, warning, error)` 兩個 frozen dataclass，`ThemePalette` 新增欄位 `levels: LevelColors` 與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框）；`LIGHT`／`DARK` 各自填入上表
+- `build_stylesheet()` 依 `levels` 產生每個等級的 4 條 QSS 規則（`QPushButton[variant="level"][level="DEBUG"]` 等），淡色以 `rgba(r, g, b, α)` 由 `fg` 換算，不另外寫死
+- 記錄行上色與按鈕共用同一組 `LevelColor`，按鈕和文字的顏色保證一致
+- 實測對比（WCAG）：淺色 `fg`/`surface` 4.76～5.17、`on`/`fg` 同值；深色 `fg`/`surface` 5.12～8.48、`on`/`fg` 6.62～10.93
+- `test_theme.py` 新增：兩個主題的四個等級都產生了 QSS 規則，且每個 `fg` 在 `surface` 上、`on` 在 `fg` 上的對比都 ≥ 4.5:1
 
 ## 7. 錯誤處理
 
@@ -194,7 +227,7 @@ class ConsolePanel(QWidget):
 - 等級鈕上的筆數正確（含被隱藏的等級）
 - 搜尋：不分大小寫、與等級篩選同時生效、清空搜尋還原
 - 清除會清空面板與 buffer；複製只複製可見內容
-- 主題切換後顏色改變（檢查 ERROR 行的文字顏色 = 色票 `danger`）
+- 主題切換後顏色改變（檢查 ERROR 行等級欄位的文字顏色 = 該主題 `levels.error.fg`）
 - 自動捲動：在底端時跟著捲；往上捲後新增記錄不改變捲軸位置
 - `ConsoleSettings`：無鍵時預設值、`debug,info,error` 讀出三個等級、空字串為空集合、未知等級忽略、高度非法時回預設
 
