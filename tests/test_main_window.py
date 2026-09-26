@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox
 from src.config.app_settings import TIMEOUT_MAX, AppSettings
 from src.core.connection_store import ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch
+from src.ui import main_window as main_window_module
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
 from src.ui.theme import DARK, ThemeManager, ThemeMode
 from tests.helpers import wait_until, write_settings
@@ -608,3 +609,156 @@ def test_apply_app_settings_missing_icon_keeps_old_and_warns(env, app_calls):
     assert app_calls.icons == []
     assert window.notification.level == "warning"
     assert "找不到圖示檔" in window.notification.text
+
+
+# ---------- F11：設定頁切換、未存檔保護 ----------
+
+WORKSPACE_KEYS = ("F1", "F2", "F3", "F5", "F6", "Ctrl+Shift+F")
+
+
+def shortcut_enabled(window, key):
+    return next(sc for sc in window.findChildren(QShortcut) if sc.key() == QKeySequence(key)).isEnabled()
+
+
+def open_settings(window):
+    press_shortcut(window, "F11")
+    return window.settings_page
+
+
+def test_f11_opens_settings_page_and_locks_workspace(env):
+    window = env.make()
+    page = open_settings(window)
+    assert window.stack.currentWidget() is page
+    assert page.editor.values()["app.timeout"] == 120
+    assert not window.sidebar.isEnabled()
+    assert not any(shortcut_enabled(window, key) for key in WORKSPACE_KEYS)
+    assert shortcut_enabled(window, "F11") and shortcut_enabled(window, "Esc")
+
+
+def test_f11_again_returns_to_workspace(env):
+    window = env.make()
+    open_settings(window)
+    press_shortcut(window, "F11")
+    assert window.stack.currentWidget() is window.workspace
+    assert window.sidebar.isEnabled()
+    assert all(shortcut_enabled(window, key) for key in WORKSPACE_KEYS)
+
+
+def test_back_button_returns_to_workspace(env):
+    window = env.make()
+    open_settings(window).back_button.click()
+    assert window.stack.currentWidget() is window.workspace
+
+
+def test_escape_on_settings_page_goes_back_instead_of_closing(env):
+    window = env.make()
+    asked = []
+    window._confirm = lambda title, text: asked.append(title) or False
+    open_settings(window)
+    press_shortcut(window, "Esc")
+    assert window.stack.currentWidget() is window.workspace
+    assert asked == []
+    press_shortcut(window, "Esc")  # 回到工作區後 Esc 仍是離開程式
+    assert asked == ["離開程式"]
+
+
+def test_reopening_reloads_file_from_disk(env):
+    window = env.make()
+    open_settings(window)
+    press_shortcut(window, "F11")
+    env.settings_path.write_text(env.settings_path.read_text(encoding="utf-8").replace("timeout: 120", "timeout: 90"), encoding="utf-8")
+    assert open_settings(window).editor.values()["app.timeout"] == 90
+
+
+def test_unsaved_cancel_stays_on_settings_page(env):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "timeout").setValue(60)
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Cancel
+    press_shortcut(window, "F11")
+    assert window.stack.currentWidget() is page
+
+
+def test_unsaved_discard_leaves_without_writing(env):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "timeout").setValue(60)
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
+    press_shortcut(window, "F11")
+    assert window.stack.currentWidget() is window.workspace
+    assert "timeout: 120" in env.settings_path.read_text(encoding="utf-8")
+
+
+def test_unsaved_save_writes_hot_reloads_and_leaves(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "timeout").setValue(60)
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Save
+    press_shortcut(window, "F11")
+    assert window.stack.currentWidget() is window.workspace
+    assert "timeout: 60" in env.settings_path.read_text(encoding="utf-8")
+    assert window.timeout_spin.value() == 60
+
+
+def test_save_button_hot_reloads_and_stays(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "name").setValue("新名稱")
+    page.save_button.click()
+    assert window.windowTitle() == "新名稱"
+    assert window.app_title.text() == "新名稱"
+    assert window.stack.currentWidget() is page
+
+
+def test_restart_only_change_does_not_hot_reload(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "log", "level").setValue("debug")
+    page.save_button.click()
+    assert app_calls.names == []
+    assert page.notification.level == "warning"
+
+
+def test_missing_icon_warning_shown_on_settings_page(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "img").setValue("not/exist.ico")
+    page.save_button.click()
+    assert page.notification.level == "warning"
+    assert "找不到圖示檔" in page.notification.text
+
+
+def test_close_with_unsaved_settings_asks_before_exit_confirm(env):
+    window = env.make()
+    asked = []
+    window._confirm = lambda title, text: asked.append(title) or True
+    page = open_settings(window)
+    page.editor.parameters().child("app", "timeout").setValue(60)
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Cancel
+    assert window.close() is False
+    assert asked == []
+
+
+def test_missing_plugin_shows_placeholder(env, monkeypatch):
+    monkeypatch.setattr(main_window_module, "load_settings_plugin", lambda: None)
+    window = env.make()
+    page = open_settings(window)
+    assert page.editor is None
+    assert window.stack.currentWidget() is page
+
+
+def test_theme_change_updates_settings_page(env):
+    window = env.make()
+    page = open_settings(window)
+    env.theme.set_mode(ThemeMode.DARK)
+    assert DARK.surface in page.editor.tree.styleSheet()
+
+
+def test_notify_routes_to_visible_page(env):
+    window = env.make()
+    page = open_settings(window)
+    window._notify("info", "設定頁訊息")
+    assert page.notification.text == "設定頁訊息"
+    press_shortcut(window, "F11")
+    window._notify("info", "工作區訊息")
+    assert window.notification.text == "工作區訊息"

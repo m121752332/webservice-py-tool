@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -33,6 +34,8 @@ from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
 from src.ui.icons import about_icon, theme_icon
 from src.ui.notification_bar import NotificationBar
+from src.ui.plugin_loader import load_settings_plugin
+from src.ui.settings_page import SettingsPage
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
@@ -110,8 +113,12 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         self.sidebar = self._build_sidebar()
+        self.workspace = self._build_workspace(default_timeout)
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.workspace)
+        self.settings_page: SettingsPage | None = None  # 首次按 F11 才載入外掛並建立
         root.addWidget(self.sidebar)
-        root.addWidget(self._build_workspace(default_timeout), 1)
+        root.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
         self.status_state = QLabel()
@@ -266,6 +273,7 @@ class MainWindow(QMainWindow):
         return panel
 
     def _build_shortcuts(self) -> None:
+        self._workspace_shortcuts: list[QShortcut] = []
         for key, handler in (
             ("F1", self._on_add_requested),
             ("F2", self.connection_list.request_delete_current),
@@ -273,8 +281,11 @@ class MainWindow(QMainWindow):
             ("F5", self.run_button.click),
             ("F6", self._on_clear),
             ("Ctrl+Shift+F", self._on_format),
-            ("Esc", self.close),
         ):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.activated.connect(handler)
+            self._workspace_shortcuts.append(shortcut)
+        for key, handler in (("F11", self._toggle_settings), ("Esc", self._on_escape)):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
 
@@ -592,6 +603,74 @@ class MainWindow(QMainWindow):
         QGuiApplication.clipboard().setText(text)
         self._notify("success", "已複製回應結果")
 
+    # ---------- 設定頁 ----------
+
+    def _settings_active(self) -> bool:
+        return self.settings_page is not None and self.stack.currentWidget() is self.settings_page
+
+    @Slot()
+    def _toggle_settings(self) -> None:
+        if self._settings_active():
+            self._leave_settings()
+        else:
+            self._enter_settings()
+
+    @Slot()
+    def _on_escape(self) -> None:
+        if self._settings_active():
+            self._leave_settings()
+        else:
+            self.close()
+
+    def _enter_settings(self) -> None:
+        if self.settings_page is None:
+            self.settings_page = SettingsPage(load_settings_plugin(), self._theme.palette)
+            self.settings_page.saved.connect(self._on_settings_saved)
+            self.settings_page.backRequested.connect(self._leave_settings)
+            self.stack.addWidget(self.settings_page)
+        self.settings_page.open(self._settings_path)
+        self.stack.setCurrentWidget(self.settings_page)
+        self._set_settings_mode(True)
+
+    @Slot()
+    def _leave_settings(self) -> bool:
+        """回到工作區；有未儲存修改且使用者取消（或儲存失敗）時回傳 False"""
+        if not self._settings_active():
+            return True
+        if not self._resolve_unsaved():
+            return False
+        self.stack.setCurrentWidget(self.workspace)
+        self._set_settings_mode(False)
+        return True
+
+    def _set_settings_mode(self, active: bool) -> None:
+        """設定頁顯示期間停用左側清單與工作區快捷鍵，避免在看不到的地方送出請求"""
+        self.sidebar.setEnabled(not active)
+        for shortcut in self._workspace_shortcuts:
+            shortcut.setEnabled(not active)
+
+    def _resolve_unsaved(self) -> bool:
+        """設定頁有未儲存修改時詢問；回傳 True 表示可以繼續離開"""
+        page = self.settings_page
+        if page is None or not page.is_dirty():
+            return True
+        answer = self._ask_unsaved()
+        if answer == QMessageBox.StandardButton.Save:
+            return page.save()
+        return answer == QMessageBox.StandardButton.Discard
+
+    def _ask_unsaved(self) -> QMessageBox.StandardButton:
+        return QMessageBox.question(
+            self, "未儲存的設定", "工具參數設定尚未儲存，要儲存嗎？",
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+
+    @Slot(object, object)
+    def _on_settings_saved(self, doc, changes) -> None:
+        if changes.hot:
+            self.apply_app_settings(doc.app_settings())
+
     # ---------- 狀態、通知、主題 ----------
 
     def _set_status(self, state: str, label: str, detail: str = "") -> None:
@@ -604,7 +683,10 @@ class MainWindow(QMainWindow):
         self._set_status("", "就緒")
 
     def _notify(self, level: str, text: str) -> None:
-        self.notification.show_message(level, text)
+        if self._settings_active():
+            self.settings_page.notify(level, text)
+        else:
+            self.notification.show_message(level, text)
 
     @Slot(object)
     def _on_theme_changed(self, palette: ThemePalette) -> None:
@@ -612,6 +694,8 @@ class MainWindow(QMainWindow):
         self.response_editor.set_colors(palette.xml)
         for mode, action in self.theme_actions.items():
             action.setChecked(mode is self._theme.mode)
+        if self.settings_page is not None:
+            self.settings_page.set_palette(palette)
 
     def apply_app_settings(self, settings: AppSettings) -> None:
         """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout"""
@@ -649,6 +733,9 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def closeEvent(self, event) -> None:
+        if self._settings_active() and not self._resolve_unsaved():
+            event.ignore()
+            return
         if not self._confirm("離開程式", "確定要離開嗎？"):
             event.ignore()
             return
