@@ -23,7 +23,7 @@ _BOM = "﻿"
 _KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][\w-]*):(?P<rest>(?:[ \t].*)?)$")
 _DOUBLE = re.compile(r'"(?:[^"\\]|\\.)*"')
 _SINGLE = re.compile(r"'(?:[^']|'')*'")
-_PLAIN = re.compile(r"[^#]*?(?=\s+#|\s*$)")
+_PLAIN = re.compile(r".*?(?=\s+#|\s*$)")  # 值不會以 # 開頭；「C#」、「/#top」等 # 前無空白者屬於值
 
 
 class SettingsError(Exception):

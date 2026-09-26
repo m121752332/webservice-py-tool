@@ -124,6 +124,22 @@ def test_quote_styles_and_trailing_comment(tmp_path):
     )
 
 
+def test_plain_value_containing_hash_without_space(tmp_path):
+    doc = load_text(tmp_path, "a:\n  u: C#\n  w: http://x/#top  # 註解\n")
+    assert doc.values() == {"a.u": "C#", "a.w": "http://x/#top"}
+    text = doc.render({"a.u": "F#", "a.w": "http://y/#end"})
+    assert text == "a:\n  u: F#\n  w: http://y/#end  # 註解\n"
+
+
+def test_plain_value_changed_to_hash_reloads(tmp_path):
+    doc = load_text(tmp_path, "a:\n  u: x  # 註解\n")
+    text = doc.render({"a.u": "C#"})
+    assert text == "a:\n  u: C#  # 註解\n"
+    reloaded = SettingsDocument.load(write_settings(tmp_path / "out.yaml", text))
+    assert reloaded.values() == {"a.u": "C#"}
+    assert reloaded.render({}) == text
+
+
 @pytest.mark.parametrize("value", ["true", "a: b", "x # y", " 前後空白 ", ""])
 def test_plain_string_that_would_change_meaning_gets_quoted(tmp_path, value):
     doc = load_text(tmp_path, "a:\n  p: x\n")
