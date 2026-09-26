@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import threading
+from dataclasses import replace
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +15,7 @@ from src.config.app_settings import TIMEOUT_MAX, AppSettings
 from src.core.connection_store import ConnectionStore
 from src.core.log_buffer import LogBuffer
 from src.core.soap_service import CallResult, ParamCountMismatch
+from src.core.xml_log import CallRecord
 from src.ui import main_window as main_window_module
 from src.ui.log_console import ConsoleSettings
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
@@ -66,10 +69,10 @@ def env(qapp, tmp_path):
     )
     windows = []
 
-    def make(store=None):
+    def make(store=None, xml_log_dir=None):
         window = MainWindow(
             store or ctx.store, service, theme, ABOUT, default_timeout=30, settings_path=settings_path,
-            settings=qsettings, log_buffer=log_buffer,
+            settings=qsettings, log_buffer=log_buffer, xml_log_dir=xml_log_dir,
         )
         window._confirm = lambda title, text: True
         window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
@@ -986,3 +989,99 @@ def test_console_follows_theme(env):
     window = env.make()
     env.theme.set_mode(ThemeMode.DARK)
     assert window.console_panel._palette is DARK
+
+
+# ---------- 請求紀錄（F10） ----------
+
+def make_record(**changes):
+    base = CallRecord(
+        time=datetime(2026, 9, 26, 9, 0), connection="正式區", url="http://prod/ws?WSDL", method="GetPOData",
+        status="success", elapsed=0.1, size=5, params="<Request>old</Request>",
+    )
+    return replace(base, **changes)
+
+
+def test_record_button_hidden_without_log_dir(env):
+    window = env.make()
+    assert window.record_button is None
+    assert not any(sc.key() == QKeySequence("F10") for sc in window.findChildren(QShortcut))
+
+
+def test_record_button_and_f10_open_viewer(env, tmp_path):
+    window = env.make(xml_log_dir=tmp_path)
+    assert footer_buttons(window)[-1] is window.record_button
+    assert window.record_button.text() == "" and "F10" in window.record_button.toolTip()
+    press_shortcut(window, "F10")
+    viewer = window.xml_log_viewer
+    assert viewer is not None and viewer.isVisible()
+    window.record_button.click()
+    assert window.xml_log_viewer is viewer  # 只建立一次
+
+
+def test_footer_buttons_fit_sidebar_with_record_button(env, tmp_path):
+    window = env.make(xml_log_dir=tmp_path)
+    footer = window.sidebar.layout().itemAt(2).layout()
+    buttons = footer_buttons(window)
+    needed = sum(b.sizeHint().width() for b in buttons) + footer.spacing() * (len(buttons) - 1)
+    margins = window.sidebar.layout().contentsMargins()
+    assert needed <= window.sidebar.width() - margins.left() - margins.right()
+
+
+def test_load_record_selects_connection_and_fills_fields(env, tmp_path):
+    seed(env.store, name="測試區", url="http://test/ws?WSDL")
+    target = seed(env.store, methods=("AddTwo", "GetPOData"))
+    window = env.make(xml_log_dir=tmp_path)
+    window.load_record(make_record())
+    assert window.connection_list.current_uuid() == target
+    assert window.method_combo.currentText() == "GetPOData"
+    assert window.request_editor.toPlainText() == "<Request>old</Request>"
+    assert window.notification.level == "info"
+
+
+def test_load_record_falls_back_to_url_match(env, tmp_path):
+    target = seed(env.store, name="改過名字")
+    window = env.make(xml_log_dir=tmp_path)
+    window.load_record(make_record(connection="舊名字", url="http://PROD/ws?WSDL"))
+    assert window.connection_list.current_uuid() == target
+
+
+def test_load_record_without_matching_connection_warns(env, tmp_path):
+    seed(env.store)
+    window = env.make(xml_log_dir=tmp_path)
+    window.load_record(make_record(url="http://other/ws?WSDL"))
+    assert window.notification.level == "warning"
+    assert "找不到對應的連線" in window.notification.text
+
+
+def test_load_record_while_busy_warns(env, tmp_path):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make(xml_log_dir=tmp_path)
+    window.run_button.click()
+    window.load_record(make_record(params="<Request>new</Request>"))
+    assert window.notification.level == "warning"
+    assert window.request_editor.toPlainText() != "<Request>new</Request>"
+
+
+def test_load_record_without_params_keeps_editor(env, tmp_path):
+    seed(env.store)
+    window = env.make(xml_log_dir=tmp_path)
+    window.request_editor.setPlainText("<keep/>")
+    window.load_record(make_record(params="", sent="<S/>"))
+    assert window.request_editor.toPlainText() == "<keep/>"
+    assert window.notification.level == "warning"
+
+
+def test_viewer_resend_signal_calls_load_record(env, tmp_path):
+    target = seed(env.store)
+    window = env.make(xml_log_dir=tmp_path)
+    window.open_xml_log_viewer()
+    window.xml_log_viewer.resendRequested.emit(make_record())
+    assert window.connection_list.current_uuid() == target
+
+
+def test_theme_change_updates_viewer(env, tmp_path):
+    window = env.make(xml_log_dir=tmp_path)
+    window.open_xml_log_viewer()
+    env.theme.set_mode(ThemeMode.DARK)
+    assert window.xml_log_viewer.editors["params"].colors == DARK.xml

@@ -49,6 +49,19 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 * 可輸入關鍵字搜尋（不分大小寫），並提供清除、複製目前顯示內容
 * 開關狀態、面板高度、篩選的等級會存到 `settings.ini`，下次啟動沿用；不影響 `app_data/logs/run.log` 本身的記錄等級（仍依 `ws_tool.yaml` 的 `app.log.level` 設定）
 
+### 記錄檔
+
+所有記錄檔都放在 `ws_tool.yaml` 的 `app.log.path`（預設 `app_data/logs`），每天自動歸檔為 `名稱_YYYYMMDD.log`，超過保留天數的歸檔會自動刪除。
+
+| 檔案 | 內容 | 相關設定 |
+| --- | --- | --- |
+| `run.log` | `app.log.level` 以上的所有記錄 | `level`、`retention` |
+| `ws_info.log`／`ws_debug.log`／`ws_error.log` | 只收該等級 | `levels`、`retention` |
+| `ws_other.log` | TRACE、SUCCESS、WARNING、CRITICAL | `levels`、`retention` |
+| `ws_xml.log` | 每次執行請求的參數＋回應（或 SOAP 信封） | `xml.enabled`、`xml.content`、`xml.retention` |
+
+按 **F10** 或側欄的紀錄按鈕開啟「請求紀錄」視窗，可依日期、連線、方法與關鍵字查詢，並把某一筆帶回工作區重新執行。
+
 ## 版本產生
 切到 src/config 底下輸入
 `python grab_version.py C:\Windows\System32\WWAHost.exe`  

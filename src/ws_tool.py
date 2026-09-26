@@ -143,7 +143,7 @@ def main() -> int:
     window = MainWindow(
         store, SoapService(recorder=create_recorder(log_dir, config)), theme, about,
         default_timeout=config.app_timeout, settings_path=config.config_path,
-        settings=settings, log_buffer=log_buffer,
+        settings=settings, log_buffer=log_buffer, xml_log_dir=log_dir,
     )
     window.show()
     return app.exec()

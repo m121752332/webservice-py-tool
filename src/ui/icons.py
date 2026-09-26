@@ -9,6 +9,7 @@ ICON_CANVAS = 64  # 以大尺寸繪製，縮小顯示時邊緣平滑
 THEME_GRADIENT = ("#8B5CF6", "#EC4899")
 ABOUT_GRADIENT = ("#0EA5E9", "#2563EB")
 CONSOLE_GRADIENT = ("#10B981", "#0D9488")
+RECORD_GRADIENT = ("#F59E0B", "#EA580C")
 PALETTE_DOTS = ("#FACC15", "#34D399", "#38BDF8", "#F87171")
 
 
@@ -66,5 +67,18 @@ def console_icon() -> QIcon:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawPolyline([QPointF(16, 22), QPointF(26, 32), QPointF(16, 42)])
     painter.drawLine(QPointF(32, 43), QPointF(46, 43))
+    painter.end()
+    return QIcon(pixmap)
+
+
+def record_icon() -> QIcon:
+    """請求紀錄：漸層文件與白色條列線"""
+    pixmap, painter = _canvas()
+    painter.setBrush(_gradient(RECORD_GRADIENT))
+    painter.drawRoundedRect(QRectF(10, 4, 44, 56), 8, 8)
+    pen = QPen(QColor("#FFFFFF"), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap)
+    painter.setPen(pen)
+    for y, end in ((18, 44), (30, 44), (42, 34)):
+        painter.drawLine(QPointF(20, y), QPointF(end, y))
     painter.end()
     return QIcon(pixmap)

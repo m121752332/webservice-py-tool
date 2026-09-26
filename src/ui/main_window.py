@@ -32,9 +32,10 @@ from src.config.app_settings import HOT_RELOAD_KEYS, TIMEOUT_MAX, TIMEOUT_MIN, A
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.log_buffer import LogBuffer
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
+from src.core.xml_log import CallRecord
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
-from src.ui.icons import about_icon, console_icon, theme_icon
+from src.ui.icons import about_icon, console_icon, record_icon, theme_icon
 from src.ui.log_console import ConsolePanel, ConsoleSettings
 from src.ui.notification_bar import NotificationBar
 from src.ui.plugin_loader import load_settings_plugin
@@ -42,6 +43,7 @@ from src.ui.settings_page import SettingsPage
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
+from src.ui.xml_log_viewer import XmlLogViewer
 from src.utils import path_util
 
 XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
@@ -51,8 +53,9 @@ RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 NEW_FOLDER_NAME = "新目錄"
 FOOTER_ICON_SIZE = 20
-FOOTER_SPACING = 6  # 三顆 footer 按鈕要塞進 236 px
+FOOTER_SPACING = 2  # 四顆 footer 按鈕（含請求紀錄）要塞進 236 px
 CONSOLE_SHORTCUT = "Ctrl+`"
+RECORD_SHORTCUT = "F10"
 CONSOLE_MIN_HEIGHT = 120
 THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
 
@@ -89,7 +92,8 @@ def _caption(text: str) -> QLabel:
 class MainWindow(QMainWindow):
     def __init__(self, store: ConnectionStore, service, theme: ThemeManager, about: AboutInfo,
                  default_timeout: int, settings_path: Path, parent=None, *,
-                 settings: QSettings | None = None, log_buffer: LogBuffer | None = None):
+                 settings: QSettings | None = None, log_buffer: LogBuffer | None = None,
+                 xml_log_dir: Path | None = None):
         super().__init__(parent)
         self._store = store
         self._service = service
@@ -103,6 +107,8 @@ class MainWindow(QMainWindow):
         self._tasks = {}  # tag -> Task，保留參照直到收到回呼
         self._console_settings = ConsoleSettings(settings)
         self._log_buffer = log_buffer if log_buffer is not None else LogBuffer()
+        self._xml_log_dir = Path(xml_log_dir) if xml_log_dir is not None else None
+        self.xml_log_viewer: XmlLogViewer | None = None  # 首次按 F10 才建立
 
         self.setWindowTitle(about.name)
         self.resize(1100, 700)
@@ -175,6 +181,13 @@ class MainWindow(QMainWindow):
         footer.addWidget(self.theme_button)
         footer.addWidget(self.about_button)
         footer.addWidget(self.console_button)
+        self.record_button = None
+        if self._xml_log_dir is not None:
+            # 只顯示圖示：既有三顆文字按鈕已接近側欄 236 px 上限
+            self.record_button = styled_button("", "footer", f"請求紀錄 ({RECORD_SHORTCUT})")
+            self.record_button.setIcon(record_icon())
+            self.record_button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
+            footer.addWidget(self.record_button)
         footer.addStretch(1)
 
         layout.addWidget(self.app_title)
@@ -314,6 +327,9 @@ class MainWindow(QMainWindow):
         ):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
+        if self._xml_log_dir is not None:
+            shortcut = QShortcut(QKeySequence(RECORD_SHORTCUT), self)
+            shortcut.activated.connect(self.open_xml_log_viewer)
 
     def _connect_signals(self) -> None:
         self.connection_list.selectionChanged.connect(self._on_selection_changed)
@@ -335,6 +351,8 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self._on_copy)
         self.about_button.clicked.connect(self._show_about)
         self.console_button.clicked.connect(self.toggle_console)
+        if self.record_button is not None:
+            self.record_button.clicked.connect(self.open_xml_log_viewer)
         self.console_panel.closeRequested.connect(lambda: self.set_console_visible(False))
         self.console_panel.levelsChanged.connect(self._console_settings.set_levels)
 
@@ -608,6 +626,54 @@ class MainWindow(QMainWindow):
         self.response_editor.setPlainText(result.text)
         self._set_status("success", "● 成功", f"{result.elapsed:.2f} s · {format_size(result.size)}")
 
+    # ---------- 請求紀錄 ----------
+
+    def open_xml_log_viewer(self) -> None:
+        if self._xml_log_dir is None:
+            return
+        if self.xml_log_viewer is None:
+            self.xml_log_viewer = XmlLogViewer(self._xml_log_dir, self._theme.palette, self)
+            self.xml_log_viewer.resendRequested.connect(self.load_record)
+        viewer = self.xml_log_viewer
+        viewer.refresh()
+        viewer.setWindowState(viewer.windowState() & ~Qt.WindowState.WindowMinimized)
+        viewer.show()
+        viewer.raise_()
+        viewer.activateWindow()
+
+    def _find_connection(self, name: str, url: str) -> Connection | None:
+        """URL 相同（不分大小寫）的連線中優先取名稱也相同者"""
+        key = url.strip().lower()
+        same_url = [conn for conn in self._store.all() if conn.url.strip().lower() == key]
+        return next((conn for conn in same_url if conn.name == name), same_url[0] if same_url else None)
+
+    @Slot(object)
+    def load_record(self, record: CallRecord) -> None:
+        """查閱視窗「帶回工作區」：選取對應連線並填入方法與參數"""
+        self.raise_()
+        self.activateWindow()
+        if self._settings_active() and not self._leave_settings():
+            return
+        if self._pending:
+            self._notify("warning", "目前有工作進行中，請等待完成或取消後再帶回")
+            return
+        conn = self._find_connection(record.connection, record.url)
+        if conn is None:
+            self._notify("warning", f"找不到對應的連線：{record.connection or record.url}")
+            return
+        self.connection_list.select(conn.uuid)
+        index = self.method_combo.findText(record.method)
+        if index >= 0:
+            self.method_combo.setCurrentIndex(index)
+        else:
+            self.method_combo.setEditText(record.method)
+        if not record.params:
+            self._notify("warning", "這筆紀錄沒有保存請求參數（log.xml.content 為 envelope），只帶回連線與方法")
+            return
+        self.request_editor.setPlainText(record.params)
+        self.response_editor.clear()
+        self._notify("info", f"已帶回 {record.method} 的請求參數，按 F5 重新執行")
+
     # ---------- 編輯器工具 ----------
 
     def _on_clear(self) -> None:
@@ -764,6 +830,8 @@ class MainWindow(QMainWindow):
         if self.settings_page is not None:
             self.settings_page.set_palette(palette)
         self.console_panel.set_palette(palette)
+        if self.xml_log_viewer is not None:
+            self.xml_log_viewer.set_palette(palette)
 
     def apply_app_settings(self, settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS) -> None:
         """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout；只套用 keys 列出的欄位"""
