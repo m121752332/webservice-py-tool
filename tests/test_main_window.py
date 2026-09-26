@@ -3,6 +3,7 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from loguru import logger
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
 from PySide6.QtTest import QTest
@@ -10,8 +11,10 @@ from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox
 
 from src.config.app_settings import TIMEOUT_MAX, AppSettings
 from src.core.connection_store import ConnectionStore
+from src.core.log_buffer import LogBuffer
 from src.core.soap_service import CallResult, ParamCountMismatch
 from src.ui import main_window as main_window_module
+from src.ui.log_console import ConsoleSettings
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
 from src.ui.theme import DARK, ThemeManager, ThemeMode
 from tests.helpers import wait_until, write_settings
@@ -49,17 +52,23 @@ class FakeService:
 @pytest.fixture
 def env(qapp, tmp_path):
     service = FakeService()
-    theme = ThemeManager(qapp, QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
+    qsettings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
+    theme = ThemeManager(qapp, qsettings)
     theme.apply()
     settings_path = write_settings(tmp_path / "ws_tool.yaml")
+    log_buffer = LogBuffer()
+    handler_id = log_buffer.attach()
     ctx = SimpleNamespace(
         store=ConnectionStore(tmp_path / "connections.profile"), service=service, theme=theme,
-        settings_path=settings_path,
+        settings_path=settings_path, qsettings=qsettings, log_buffer=log_buffer,
     )
     windows = []
 
     def make(store=None):
-        window = MainWindow(store or ctx.store, service, theme, ABOUT, default_timeout=30, settings_path=settings_path)
+        window = MainWindow(
+            store or ctx.store, service, theme, ABOUT, default_timeout=30, settings_path=settings_path,
+            settings=qsettings, log_buffer=log_buffer,
+        )
         window._confirm = lambda title, text: True
         window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
         windows.append(window)
@@ -74,6 +83,7 @@ def env(qapp, tmp_path):
         window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
         window.close()
         window.deleteLater()
+    logger.remove(handler_id)
 
 
 def seed(store, name="正式區", url="http://prod/ws?WSDL", methods=("GetPOData",)):
@@ -631,7 +641,7 @@ def test_f11_opens_settings_page_and_locks_workspace(env):
     page = open_settings(window)
     assert window.stack.currentWidget() is page
     assert page.editor.values()["app.timeout"] == 120
-    assert not window.sidebar.isEnabled()
+    assert not window.connection_list.isEnabled()
     assert not any(shortcut_enabled(window, key) for key in WORKSPACE_KEYS)
     assert shortcut_enabled(window, "F11") and shortcut_enabled(window, "Esc")
 
@@ -641,7 +651,7 @@ def test_f11_again_returns_to_workspace(env):
     open_settings(window)
     press_shortcut(window, "F11")
     assert window.stack.currentWidget() is window.workspace
-    assert window.sidebar.isEnabled()
+    assert window.connection_list.isEnabled()
     assert all(shortcut_enabled(window, key) for key in WORKSPACE_KEYS)
 
 
@@ -858,3 +868,111 @@ def test_saving_name_only_keeps_session_timeout_and_icon(env, app_calls):
     assert window._about.name == "新名稱"
     assert window.timeout_spin.value() == 40
     assert app_calls.icons == []
+
+
+# ---------- 主控台 ----------
+
+def footer_buttons(window):
+    footer = window.sidebar.layout().itemAt(2).layout()
+    return [footer.itemAt(i).widget() for i in range(footer.count()) if footer.itemAt(i).widget()]
+
+
+def test_console_button_is_after_about_and_panel_hidden_by_default(env):
+    window = env.make()
+    assert footer_buttons(window) == [window.theme_button, window.about_button, window.console_button]
+    assert window.console_button.text() == "主控台"
+    assert window.console_panel.isHidden()
+    assert not window.console_button.isChecked()
+
+
+def test_footer_buttons_fit_sidebar(env):
+    window = env.make()
+    footer = window.sidebar.layout().itemAt(2).layout()
+    buttons = footer_buttons(window)
+    needed = sum(b.sizeHint().width() for b in buttons) + footer.spacing() * (len(buttons) - 1)
+    margins = window.sidebar.layout().contentsMargins()
+    assert needed <= window.sidebar.width() - margins.left() - margins.right()
+
+
+def test_console_toggles_via_button_shortcut_and_close(env):
+    window = env.make()
+    window.console_button.click()
+    assert not window.console_panel.isHidden() and window.console_button.isChecked()
+    assert ConsoleSettings(env.qsettings).visible() is True
+    press_shortcut(window, "Ctrl+`")
+    assert window.console_panel.isHidden() and not window.console_button.isChecked()
+    press_shortcut(window, "Ctrl+`")
+    window.console_panel.close_button.click()
+    assert window.console_panel.isHidden() and not window.console_button.isChecked()
+    assert ConsoleSettings(env.qsettings).visible() is False
+
+
+def test_console_restores_visibility_levels_and_height(env):
+    saved = ConsoleSettings(env.qsettings)
+    saved.set_visible(True)
+    saved.set_levels({"ERROR", "CRITICAL"})
+    saved.set_height(300)
+    window = env.make()
+    window.resize(1100, 900)  # 700 高時工作區最小高度會把面板壓到 300 以下
+    window.show()
+    wait_until(lambda: window.console_panel.height() > 0)
+    assert not window.console_panel.isHidden() and window.console_button.isChecked()
+    assert window.console_panel.levels() == {"ERROR", "CRITICAL"}
+    assert abs(window.console_panel.height() - 300) <= 10
+
+
+def test_console_level_toggle_is_saved(env):
+    window = env.make()
+    window.console_panel.level_buttons["ERROR"].click()
+    assert ConsoleSettings(env.qsettings).levels() == {"DEBUG", "INFO", "SUCCESS", "ERROR"}
+
+
+def test_console_height_saved_when_hidden(env):
+    window = env.make()
+    window.resize(1100, 700)
+    window.show()
+    window.set_console_visible(True)
+    wait_until(lambda: window.console_panel.height() > 0)
+    window.right_splitter.setSizes([400, 260])
+    expected = window.right_splitter.sizes()[1]
+    window.set_console_visible(False)
+    assert ConsoleSettings(env.qsettings).height() == expected
+
+
+def test_console_usable_on_settings_page(env):
+    window = env.make()
+    open_settings(window)
+    press_shortcut(window, "Ctrl+`")
+    assert not window.console_panel.isHidden()
+    assert window.console_button.isEnabled() and window.theme_button.isEnabled()
+    assert not window.connection_list.isEnabled()
+    assert shortcut_enabled(window, "Ctrl+`")
+
+
+def test_console_shows_load_and_run_logs(env):
+    seed(env.store)
+    window = env.make()
+    window.load_button.click()
+    wait_until(lambda: "讀取完成" in window.console_panel.visible_text())
+    window.run_button.click()
+    wait_until(lambda: "請求完成" in window.console_panel.visible_text())
+    text = window.console_panel.visible_text()
+    assert "INFO     讀取 WSDL · URL=http://prod/ws?WSDL" in text
+    assert "SUCCESS  讀取完成 · 2 個方法" in text
+    assert "INFO     執行請求" in text
+    assert "SUCCESS  請求完成" in text
+
+
+def test_console_logs_cancel(env):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.load_button.click()
+    window.load_button.click()  # 進行中再按一次 = 取消
+    wait_until(lambda: "已取消讀取" in window.console_panel.visible_text())
+
+
+def test_console_follows_theme(env):
+    window = env.make()
+    env.theme.set_mode(ThemeMode.DARK)
+    assert window.console_panel._palette is DARK

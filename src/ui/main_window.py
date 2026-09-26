@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import QSize, Qt, Slot
+from PySide6.QtCore import QSettings, QSize, Qt, Slot
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QIcon, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -30,10 +30,12 @@ from PySide6.QtWidgets import (
 
 from src.config.app_settings import HOT_RELOAD_KEYS, TIMEOUT_MAX, TIMEOUT_MIN, AppSettings
 from src.core.connection_store import Connection, ConnectionStore
+from src.core.log_buffer import LogBuffer
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
-from src.ui.icons import about_icon, theme_icon
+from src.ui.icons import about_icon, console_icon, theme_icon
+from src.ui.log_console import ConsolePanel, ConsoleSettings
 from src.ui.notification_bar import NotificationBar
 from src.ui.plugin_loader import load_settings_plugin
 from src.ui.settings_page import SettingsPage
@@ -49,6 +51,9 @@ RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 NEW_FOLDER_NAME = "新目錄"
 FOOTER_ICON_SIZE = 20
+FOOTER_SPACING = 6  # 三顆 footer 按鈕要塞進 236 px
+CONSOLE_SHORTCUT = "Ctrl+`"
+CONSOLE_MIN_HEIGHT = 120
 THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
 
 
@@ -83,7 +88,8 @@ def _caption(text: str) -> QLabel:
 
 class MainWindow(QMainWindow):
     def __init__(self, store: ConnectionStore, service, theme: ThemeManager, about: AboutInfo,
-                 default_timeout: int, settings_path: Path, parent=None):
+                 default_timeout: int, settings_path: Path, parent=None, *,
+                 settings: QSettings | None = None, log_buffer: LogBuffer | None = None):
         super().__init__(parent)
         self._store = store
         self._service = service
@@ -95,6 +101,8 @@ class MainWindow(QMainWindow):
         self._pending = None  # 進行中工作的 tag：(kind, seq, uuid)
         self._seq = 0
         self._tasks = {}  # tag -> Task，保留參照直到收到回呼
+        self._console_settings = ConsoleSettings(settings)
+        self._log_buffer = log_buffer if log_buffer is not None else LogBuffer()
 
         self.setWindowTitle(about.name)
         self.resize(1100, 700)
@@ -105,6 +113,7 @@ class MainWindow(QMainWindow):
         self._theme.themeChanged.connect(self._on_theme_changed)
         self._reset_status()
         self._load_initial_connections()
+        self.set_console_visible(self._console_settings.visible())
 
     # ---------- 版面 ----------
 
@@ -118,8 +127,17 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.stack.addWidget(self.workspace)
         self.settings_page: SettingsPage | None = None  # 首次按 F11 才載入外掛並建立
+        self.console_panel = ConsolePanel(self._log_buffer, self._theme.palette, self._console_settings.levels())
+        self.console_panel.setMinimumHeight(CONSOLE_MIN_HEIGHT)
+        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.right_splitter.setChildrenCollapsible(False)
+        self.right_splitter.addWidget(self.stack)
+        self.right_splitter.addWidget(self.console_panel)
+        self.right_splitter.setStretchFactor(0, 1)  # 視窗放大時多出的空間給上方，面板維持高度
+        self.right_splitter.setStretchFactor(1, 0)
+        self.console_panel.hide()
         root.addWidget(self.sidebar)
-        root.addWidget(self.stack, 1)
+        root.addWidget(self.right_splitter, 1)
         self.setCentralWidget(central)
 
         self.status_state = QLabel()
@@ -145,13 +163,18 @@ class MainWindow(QMainWindow):
         self.theme_button = styled_button("主題", "footer", "切換淺色 / 深色主題")
         self.theme_button.setMenu(self._build_theme_menu())
         self.about_button = styled_button("關於", "footer")
-        for button, icon in ((self.theme_button, theme_icon()), (self.about_button, about_icon())):
+        self.console_button = styled_button("主控台", "footer", f"開關主控台 ({CONSOLE_SHORTCUT})")
+        self.console_button.setCheckable(True)
+        for button, icon in (
+            (self.theme_button, theme_icon()), (self.about_button, about_icon()), (self.console_button, console_icon()),
+        ):
             button.setIcon(icon)
             button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
         footer = QHBoxLayout()
-        footer.setSpacing(8)
+        footer.setSpacing(FOOTER_SPACING)
         footer.addWidget(self.theme_button)
         footer.addWidget(self.about_button)
+        footer.addWidget(self.console_button)
         footer.addStretch(1)
 
         layout.addWidget(self.app_title)
@@ -286,7 +309,9 @@ class MainWindow(QMainWindow):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
             self._workspace_shortcuts.append(shortcut)
-        for key, handler in (("F11", self._toggle_settings), ("Esc", self._on_escape)):
+        for key, handler in (
+            ("F11", self._toggle_settings), ("Esc", self._on_escape), (CONSOLE_SHORTCUT, self.toggle_console),
+        ):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
 
@@ -309,6 +334,9 @@ class MainWindow(QMainWindow):
         self.format_button.clicked.connect(self._on_format)
         self.copy_button.clicked.connect(self._on_copy)
         self.about_button.clicked.connect(self._show_about)
+        self.console_button.clicked.connect(self.toggle_console)
+        self.console_panel.closeRequested.connect(lambda: self.set_console_visible(False))
+        self.console_panel.levelsChanged.connect(self._console_settings.set_levels)
 
     # ---------- 連線資料 ----------
 
@@ -468,6 +496,7 @@ class MainWindow(QMainWindow):
         if not url:
             self._notify("warning", "請填寫 WSDL 網址")
             return
+        logger.info("讀取 WSDL · URL={}", url)
         self._start("load", self._service.load_methods, url, self.timeout_spin.value())
 
     def _on_run_clicked(self) -> None:
@@ -503,6 +532,7 @@ class MainWindow(QMainWindow):
         )
 
     def _cancel(self) -> None:
+        logger.info("已取消{}", "讀取" if self._pending[0] == "load" else "執行")
         self._finish()
         self._set_status("", "已取消")
         self._notify("info", "已取消。背景請求會在逾時後自動結束")
@@ -556,6 +586,7 @@ class MainWindow(QMainWindow):
     def _on_methods_loaded(self, uuid: str, methods: list[str]) -> None:
         if self._store.get(uuid) is None:
             return  # F1：連線在背景工作進行時被刪除，或 uuid 為 None（目錄選取中）
+        logger.success("讀取完成 · {} 個方法", len(methods))
         self._store.set_methods(uuid, methods)
         self.connection_list.update_connection(self._store.get(uuid))
         if uuid == self._current_uuid:
@@ -567,7 +598,7 @@ class MainWindow(QMainWindow):
 
     def _on_call_finished(self, result: CallResult) -> None:
         url, method = getattr(self, "_run_context", ("", ""))
-        logger.info(
+        logger.success(
             "請求完成 · URL={} · 方法={} · 耗時={:.2f}s · 大小={} · 回應={}",
             url, method, result.elapsed, result.size, _cap(result.text),
         )
@@ -603,6 +634,31 @@ class MainWindow(QMainWindow):
             return
         QGuiApplication.clipboard().setText(text)
         self._notify("success", "已複製回應結果")
+
+    # ---------- 主控台 ----------
+
+    @Slot()
+    def toggle_console(self) -> None:
+        self.set_console_visible(self.console_panel.isHidden())
+
+    def set_console_visible(self, visible: bool) -> None:
+        if not visible and not self.console_panel.isHidden():
+            self._remember_console_height()
+        self.console_panel.setVisible(visible)
+        self.console_button.setChecked(visible)
+        if visible:
+            self._apply_console_height()
+        self._console_settings.set_visible(visible)
+
+    def _apply_console_height(self) -> None:
+        height = self._console_settings.height()
+        total = sum(self.right_splitter.sizes()) or self.right_splitter.height()
+        self.right_splitter.setSizes([max(total - height, 1), height])
+
+    def _remember_console_height(self) -> None:
+        height = self.right_splitter.sizes()[1]
+        if height > 0:
+            self._console_settings.set_height(height)
 
     # ---------- 設定頁 ----------
 
@@ -652,8 +708,8 @@ class MainWindow(QMainWindow):
             self.notification.show_message(bar.level, bar.text)
 
     def _set_settings_mode(self, active: bool) -> None:
-        """設定頁顯示期間停用左側清單與工作區快捷鍵，避免在看不到的地方送出請求"""
-        self.sidebar.setEnabled(not active)
+        """設定頁顯示期間停用連線清單與工作區快捷鍵，避免在看不到的地方送出請求；footer 按鈕（含主控台）維持可用"""
+        self.connection_list.setEnabled(not active)
         for shortcut in self._workspace_shortcuts:
             shortcut.setEnabled(not active)
 
@@ -704,6 +760,7 @@ class MainWindow(QMainWindow):
             action.setChecked(mode is self._theme.mode)
         if self.settings_page is not None:
             self.settings_page.set_palette(palette)
+        self.console_panel.set_palette(palette)
 
     def apply_app_settings(self, settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS) -> None:
         """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout；只套用 keys 列出的欄位"""
@@ -756,6 +813,10 @@ class MainWindow(QMainWindow):
         if not self._confirm("離開程式", "確定要離開嗎？"):
             event.ignore()
             return
+        logger.info("程式關閉")
+        if not self.console_panel.isHidden():
+            self._remember_console_height()
+        self.console_panel.detach()
         self._commit_fields()
         self._pending = None
         event.accept()

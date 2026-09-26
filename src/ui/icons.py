@@ -3,11 +3,12 @@
 側欄底部按鈕圖示：以 QPainter 繪製的漸層向量圖，不依賴外部圖檔
 """
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 
 ICON_CANVAS = 64  # 以大尺寸繪製，縮小顯示時邊緣平滑
 THEME_GRADIENT = ("#8B5CF6", "#EC4899")
 ABOUT_GRADIENT = ("#0EA5E9", "#2563EB")
+CONSOLE_GRADIENT = ("#10B981", "#0D9488")
 PALETTE_DOTS = ("#FACC15", "#34D399", "#38BDF8", "#F87171")
 
 
@@ -51,5 +52,19 @@ def about_icon() -> QIcon:
     painter.setBrush(QColor("#FFFFFF"))
     painter.drawEllipse(QPointF(32, 19), 4.5, 4.5)
     painter.drawRoundedRect(QRectF(28, 27, 8, 22), 4, 4)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def console_icon() -> QIcon:
+    """主控台：漸層圓角方塊與白色 >_ 提示字元"""
+    pixmap, painter = _canvas()
+    painter.setBrush(_gradient(CONSOLE_GRADIENT))
+    painter.drawRoundedRect(QRectF(4, 8, 56, 48), 10, 10)
+    pen = QPen(QColor("#FFFFFF"), 6, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPolyline([QPointF(16, 22), QPointF(26, 32), QPointF(16, 42)])
+    painter.drawLine(QPointF(32, 43), QPointF(46, 43))
     painter.end()
     return QIcon(pixmap)
