@@ -25,6 +25,7 @@ dev = [
     "pyqtgraph==0.14.0",
     "pyqtinspect>=0.5.0",
     "pytest>=9.1.1",
+    "pytest-html>=4.1.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.14.4",
 ]
