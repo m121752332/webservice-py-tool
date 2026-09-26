@@ -3,6 +3,7 @@ import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QImage, QPalette
 
+from src.core.log_buffer import LEVELS
 from src.ui.theme import (
     DARK, LIGHT, ThemeManager, ThemeMode, build_qpalette, build_stylesheet, write_arrow_images,
 )
@@ -112,3 +113,51 @@ def test_dark_to_system_emits_theme_changed_once(qapp, settings):
 def test_invalid_stored_mode_falls_back_to_system(qapp, settings):
     settings.setValue("ui/theme", "purple")
     assert ThemeManager(qapp, settings).mode is ThemeMode.SYSTEM
+
+
+def _luminance(color: str) -> float:
+    channels = [int(color.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _contrast(a: str, b: str) -> float:
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+@pytest.mark.parametrize("palette", [LIGHT, DARK])
+def test_level_colors_cover_all_levels_and_are_distinct(palette):
+    assert len(palette.levels) == len(LEVELS)
+    assert len({color.fg for color in palette.levels}) == len(LEVELS)
+    assert palette.level("ERROR") is palette.levels[LEVELS.index("ERROR")]
+
+
+@pytest.mark.parametrize("palette", [LIGHT, DARK])
+def test_level_colors_meet_contrast(palette):
+    for name, color in zip(LEVELS, palette.levels):
+        assert _contrast(color.fg, palette.surface) >= 4.5, name
+        assert _contrast(color.on, color.fill) >= 4.5, name
+        assert _contrast(color.on, color.hover) >= 4.5, name
+
+
+def test_light_fill_equals_text_color_dark_fill_is_deeper():
+    assert all(color.fill == color.fg for color in LIGHT.levels)
+    # 深色主題勾選底用深色階配淺字，避免亮色實心底刺眼
+    assert all(_luminance(color.fill) < _luminance(color.fg) for color in DARK.levels)
+    assert all(_luminance(color.on) > 0.8 for color in DARK.levels)
+
+
+@pytest.mark.parametrize("palette", [LIGHT, DARK])
+def test_stylesheet_has_rules_for_every_level(palette, tmp_path):
+    qss = build_stylesheet(palette, write_arrow_images(palette.text_muted, tmp_path))
+    for name, color in zip(LEVELS, palette.levels):
+        selector = f'QPushButton[variant="level"][level="{name}"]'
+        assert f"{selector}:checked {{ background: {color.fill}; color: {color.on};" in qss
+        assert f"{selector}:checked:hover {{ background: {color.hover};" in qss
+        assert f"{selector} {{ color: {color.fg}; background: rgba(" in qss
+
+
+def test_palettes_stay_hashable():
+    hash(LIGHT)
+    hash(DARK)

@@ -43,6 +43,8 @@ def set_value(page, *names, value):
 def test_palette_colors_excludes_name_and_xml():
     colors = palette_colors(DARK)
     assert "name" not in colors and "xml" not in colors
+    assert "levels" not in colors and "level_alphas" not in colors
+    assert all(isinstance(value, str) for value in colors.values())
     assert colors["surface"] == DARK.surface
 
 

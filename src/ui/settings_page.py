@@ -23,8 +23,11 @@ _NO_CHANGES = SettingsChanges(hot=(), restart=())
 
 
 def palette_colors(palette: ThemePalette) -> dict[str, str]:
-    """外掛用的色票：ThemePalette 除 name、xml 以外的欄位"""
-    return {f.name: getattr(palette, f.name) for f in fields(palette) if f.name not in ("name", "xml")}
+    """外掛用的色票：ThemePalette 中 name 以外的顏色字串欄位（排除 xml、levels 等非字串欄位）"""
+    return {
+        f.name: getattr(palette, f.name) for f in fields(palette)
+        if f.name != "name" and isinstance(getattr(palette, f.name), str)
+    }
 
 
 class SettingsPage(QWidget):

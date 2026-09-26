@@ -12,6 +12,8 @@ from PySide6.QtCore import QObject, QPointF, QSettings, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QPalette, QPolygonF
 from PySide6.QtWidgets import QApplication, QWidget
 
+from src.core.log_buffer import LEVELS
+
 SETTINGS_KEY = "ui/theme"
 UI_FONT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI"]
 UI_FONT_SIZE = 10
@@ -41,6 +43,14 @@ class XmlColors:
 
 
 @dataclass(frozen=True)
+class LevelColor:
+    fg: str  # 文字色：未勾選按鈕文字、記錄行的等級欄位
+    fill: str  # 勾選按鈕的實心底色（淺色主題與 fg 相同；深色主題用較深色階）
+    hover: str  # 勾選按鈕懸浮時的底色
+    on: str  # 勾選按鈕（實心底）上的文字色
+
+
+@dataclass(frozen=True)
 class ThemePalette:
     name: str
     bg: str
@@ -56,6 +66,11 @@ class ThemePalette:
     warning: str
     danger: str
     xml: XmlColors
+    levels: tuple[LevelColor, ...]  # 順序同 log_buffer.LEVELS；用 tuple 讓 ThemePalette 維持可 hash
+    level_alphas: tuple[float, float, float, float]  # 未勾選淡底、未勾選懸浮淡底、未勾選外框、勾選外框的不透明度
+
+    def level(self, name: str) -> LevelColor:
+        return self.levels[LEVELS.index(name)]
 
 
 LIGHT = ThemePalette(
@@ -73,6 +88,16 @@ LIGHT = ThemePalette(
     warning="#9D5D00",
     danger="#C42B1C",
     xml=XmlColors(tag="#800000", attr_name="#E50000", attr_value="#0000FF", comment="#008000", declaration="#808080"),
+    levels=(
+        LevelColor(fg="#0E7490", fill="#0E7490", hover="#155E75", on="#FFFFFF"),  # TRACE
+        LevelColor(fg="#64748B", fill="#64748B", hover="#475569", on="#FFFFFF"),  # DEBUG
+        LevelColor(fg="#2563EB", fill="#2563EB", hover="#1D4ED8", on="#FFFFFF"),  # INFO
+        LevelColor(fg="#15803D", fill="#15803D", hover="#166534", on="#FFFFFF"),  # SUCCESS
+        LevelColor(fg="#B45309", fill="#B45309", hover="#92400E", on="#FFFFFF"),  # WARNING（#D97706 白字對比不足）
+        LevelColor(fg="#DC2626", fill="#DC2626", hover="#B91C1C", on="#FFFFFF"),  # ERROR
+        LevelColor(fg="#A21CAF", fill="#A21CAF", hover="#86198F", on="#FFFFFF"),  # CRITICAL（洋紅，與 ERROR 區隔）
+    ),
+    level_alphas=(0.12, 0.24, 0.35, 1.0),
 )
 
 DARK = ThemePalette(
@@ -90,6 +115,17 @@ DARK = ThemePalette(
     warning="#FCE100",
     danger="#FF99A4",
     xml=XmlColors(tag="#569CD6", attr_name="#9CDCFE", attr_value="#CE9178", comment="#6A9955", declaration="#808080"),
+    # 文字用亮的 400 色階；勾選底用深的 700 色階配近白字（亮色實心底在深色介面太刺眼），懸浮 800 色階
+    levels=(
+        LevelColor(fg="#22D3EE", fill="#0E7490", hover="#155E75", on="#ECFEFF"),  # TRACE
+        LevelColor(fg="#94A3B8", fill="#475569", hover="#334155", on="#F8FAFC"),  # DEBUG
+        LevelColor(fg="#60A5FA", fill="#1D4ED8", hover="#1E40AF", on="#EFF6FF"),  # INFO
+        LevelColor(fg="#4ADE80", fill="#15803D", hover="#166534", on="#F0FDF4"),  # SUCCESS
+        LevelColor(fg="#FBBF24", fill="#B45309", hover="#92400E", on="#FFFBEB"),  # WARNING
+        LevelColor(fg="#F87171", fill="#B91C1C", hover="#991B1B", on="#FEF2F2"),  # ERROR
+        LevelColor(fg="#E879F9", fill="#A21CAF", hover="#86198F", on="#FDF4FF"),  # CRITICAL
+    ),
+    level_alphas=(0.10, 0.20, 0.35, 0.55),
 )
 
 _QSS = Template("""
@@ -171,9 +207,10 @@ QPushButton[variant="green"]:disabled, QPushButton[variant="orange"]:disabled, Q
 }
 QPushButton[variant="footer"] {
     background: $surface; border: 1px solid $border; border-radius: 8px;
-    padding: 6px 12px; font-size: 10.5pt; font-weight: 600;
+    padding: 6px 7px; font-size: 10.5pt; font-weight: 600;  /* 三顆 footer 按鈕要塞進側欄 236 px */
 }
 QPushButton[variant="footer"]:hover { background: $surface_hover; border-color: $accent; }
+QPushButton[variant="footer"]:checked { background: $surface_hover; border-color: $accent; }
 QPushButton::menu-indicator { width: 0; }
 
 QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; show-decoration-selected: 0; }
@@ -189,6 +226,15 @@ QFrame#NotificationBar { background: $surface; border: 1px solid $border; border
 QFrame#NotificationBar[level="success"] { border-left-color: $success; }
 QFrame#NotificationBar[level="warning"] { border-left-color: $warning; }
 QFrame#NotificationBar[level="error"] { border-left-color: $danger; }
+
+QWidget#ConsolePanel { background: $surface; border-top: 1px solid $border; }
+QLabel#ConsoleTitle { font-weight: 600; }
+QLineEdit#ConsoleSearch { padding: 3px 8px; }
+QPlainTextEdit#ConsoleView {
+    background: $surface; border: none; padding: 2px;
+    font-family: "Cascadia Mono", "Consolas"; font-size: 9.5pt;
+}
+QPushButton[variant="level"] { border-radius: 8px; padding: 1px 8px; font-size: 8.5pt; font-weight: 600; }
 
 QStatusBar { background: $bg; border-top: 1px solid $border; }
 QStatusBar::item { border: none; }
@@ -210,6 +256,32 @@ QScrollBar::handle:hover { background: $text_muted; }
 QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
 QScrollBar::add-page, QScrollBar::sub-page { background: none; }
 """)
+
+# 每個等級 4 條規則；border-radius 必須小於按鈕高度一半（8px），否則 Qt 會畫成直角
+_LEVEL_QSS = Template("""
+QPushButton[variant="level"][level="$level"] { color: $fg; background: $tint; border: 1px solid $edge; }
+QPushButton[variant="level"][level="$level"]:hover { background: $tint_hover; border-color: $fg; }
+QPushButton[variant="level"][level="$level"]:checked { background: $fill; color: $on; border-color: $edge_on; }
+QPushButton[variant="level"][level="$level"]:checked:hover { background: $hover; border-color: $fg; }
+""")
+
+
+def _rgba(color: str, alpha: float) -> str:
+    qcolor = QColor(color)
+    return f"rgba({qcolor.red()}, {qcolor.green()}, {qcolor.blue()}, {alpha})"
+
+
+def _level_stylesheet(palette: ThemePalette) -> str:
+    """主控台等級鈕：勾選為實心 fill，未勾選為 fg 淡底（半透明色由 fg 換算，不另外寫死）"""
+    tint, tint_hover, edge, edge_on = palette.level_alphas
+    return "".join(
+        _LEVEL_QSS.substitute(
+            level=name, fg=color.fg, fill=color.fill, hover=color.hover, on=color.on,
+            tint=_rgba(color.fg, tint), tint_hover=_rgba(color.fg, tint_hover),
+            edge=_rgba(color.fg, edge), edge_on=_rgba(color.fg, edge_on),
+        )
+        for name, color in zip(LEVELS, palette.levels)
+    )
 
 
 def write_arrow_images(color: str, directory: Path) -> dict[str, str]:
@@ -244,7 +316,7 @@ def build_stylesheet(palette: ThemePalette, arrows: dict[str, str]) -> str:
     buttons = {}
     for name, (base, hover, pressed) in BUTTON_COLORS.items():
         buttons |= {name: base, f"{name}_hover": hover, f"{name}_pressed": pressed}
-    return _QSS.substitute(values | buttons | arrows)
+    return _QSS.substitute(values | buttons | arrows) + _level_stylesheet(palette)
 
 
 def build_qpalette(palette: ThemePalette) -> QPalette:
