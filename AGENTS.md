@@ -11,6 +11,7 @@ WebService 測試工具，PySide6 桌面 App，取代 wxPython 舊版。純 Wind
 - `src/config/` — 設定檔讀寫、版本資訊產生
 - `src/utils/` — 通用工具（路徑、檔案、UUID）
 - `src/ws_tool.py` — 程式進入點
+- `plugins/settings_editor/` — 設定編輯器外掛（pyqtgraph ParameterTree），另外打包；不可 import `src.*`，主程式不可直接依賴 pyqtgraph
 - `tests/` — pytest 測試，檔名與 `src/` 對應模組一一對應
 - `docs/superpowers/` — 大型功能的設計文件（specs）與實作計畫（plans），檔名格式 `YYYY-MM-DD-主題[-design].md`
 

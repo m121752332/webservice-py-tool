@@ -1,5 +1,6 @@
 @echo off
 cd /d "%~dp0"
+setlocal EnableDelayedExpansion
 
 rem Resolve uv's full path with "where"; running "uv" directly can fail when PATH contains a stray quote.
 set "UV="
@@ -33,9 +34,13 @@ if errorlevel 1 (
 )
 echo.
 
+echo Collecting hidden imports for the settings editor plugin...
+set "HIDDEN="
+for /f "usebackq eol=# delims=" %%m in ("plugins\settings_editor\host_imports.txt") do set "HIDDEN=!HIDDEN! --hidden-import=%%m"
+
 echo Building WebService-Tool...
 
-"%UV%" run pyinstaller --clean --noconfirm --log-level=WARN --icon=assets/app_icon.ico --add-data "assets;assets" --version-file src\config\file_version_info.txt -F -w -n WebService-Tool src\ws_tool.py
+"%UV%" run pyinstaller --clean --noconfirm --log-level=WARN --icon=assets/app_icon.ico --add-data "assets;assets" --version-file src\config\file_version_info.txt -F -w -n WebService-Tool !HIDDEN! src\ws_tool.py
 if errorlevel 1 (
     echo.
     echo [ERROR] Build failed.
@@ -44,5 +49,15 @@ if errorlevel 1 (
 )
 
 echo.
-echo Build process finished: dist\WebService-Tool.exe
+echo Building settings editor plugin...
+"%UV%" run python plugins\settings_editor\build_plugin.py
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Plugin build failed.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Build process finished: dist\WebService-Tool.exe + dist\plugins\settings_editor
 pause

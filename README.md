@@ -14,12 +14,14 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 3. 執行測試：`$ uv run pytest`
 4. UI 檢測工具（類似瀏覽器的「檢查元素」）：`$ uv run python -m PyQtInspect --direct --file src/ws_tool.py`
 5. 打包 exe：執行根目錄的 `build.bat`，完成後會在 `dist` 目錄產生 `WebService-Tool.exe`；散布時務必把 `app_data/`（含 `ws_tool.yaml`、`connections.profile`）資料夾與 exe 放在同一層目錄（工作目錄），如 `dist/app_data` 這樣的結構，否則程式找不到設定與連線資料
+   `build.bat` 會一併產生 `dist/plugins/settings_editor/`（設定編輯器外掛，含 pyqtgraph、numpy）；散布時放在 exe 同層即可使用 F11 設定頁，不附上則 F11 顯示「未安裝」。升級 pyqtgraph／numpy 時同步修改 `pyproject.toml` 與 `plugins/settings_editor/build_plugin.py` 的版本，並執行 `uv run python plugins/settings_editor/gen_host_imports.py` 重新產生 `host_imports.txt`
 6. 暫時不支持mac環境打包，如果有想法也可以自己去找到合適的配套方案
 
 ## 介面
 * 左側為連線清單（可搜尋、新增、刪除），可用目錄分組：拖曳或右鍵「移動到」把連線放進目錄、拖曳調整順序，右鍵「重新命名」修改目錄名稱
 * 左下角「主題」可切換 跟隨系統 / 淺色 / 深色
-* 快捷鍵：F1 新增連線、F2 刪除選取的連線或目錄、F3 讀取 WSDL、F5 執行、F6 清空、Ctrl+Shift+F 格式化請求、Esc 離開
+* 快捷鍵：F1 新增連線、F2 刪除選取的連線或目錄、F3 讀取 WSDL、F5 執行、F6 清空、Ctrl+Shift+F 格式化請求、F11 工具參數設定（再按一次或 Esc 返回）、Esc 離開
+* 按 F11 以樹狀表單編輯 app_data/ws_tool.yaml；名稱、版本、版權、圖示、逾時儲存後立即生效，log 與連線設定需重新啟動
 
 ## 版本產生
 切到 src/config 底下輸入
