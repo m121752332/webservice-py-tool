@@ -63,6 +63,7 @@ DEFAULT_CAPACITY = 5000
 
 @dataclass(frozen=True)
 class LogEntry:
+    seq: int        # 寫入順序（遞增），面板用來避免 snapshot 與即時通知重複
     time: datetime
     level: str      # LEVELS 其中之一
     message: str    # 含例外 traceback（多行）
@@ -79,19 +80,25 @@ class LogBuffer:
     def clear(self) -> None
     def add_listener(self, callback: Callable[[LogEntry], None]) -> None
     def remove_listener(self, callback) -> None
+    def attach(self) -> int                # 以 SINK_OPTIONS 註冊為 loguru sink，回傳 handler id
+
+SINK_OPTIONS = dict(level="TRACE", format="{message}", colorize=False, backtrace=False, diagnose=False)
 ```
 
 - 內部以 `collections.deque(maxlen=capacity)` 保存，`threading.Lock` 保護；超過上限自動丟掉最舊的
 - listener 在鎖外呼叫，listener 丟出的例外吞掉，避免記錄動作把主流程弄壞
-- `ws_tool.setup_logging()`（由 `main()` 呼叫）在加入 `run.log` sink 之後立刻 `logger.add(buffer.write, level="TRACE", format="{message}")`；例外內容從 `record["exception"]` 自行格式化成 traceback 文字附在 message 後
+- `ws_tool.setup_logging()`（由 `main()` 呼叫）在加入 `run.log` sink 之後立刻 `buffer.attach()`
+- 實測 loguru 0.7.3：function sink 收到的字串已經是 `{message}` 加上換行，有例外時 loguru 會自動把 traceback 接在後面；`write()` 直接取 `str(message).rstrip("
+")`，不用自己格式化。`diagnose=False` 避免 traceback 印出變數值
 - `run.log` sink 的等級不受影響，仍依 `ws_tool.yaml`
 
 ## 4. 面板（`src/ui/log_console.py`）
 
 ### 4.1 `LogBridge(QObject)`
 
-- `entryAdded = Signal(object)`；建構時 `buffer.add_listener(self._on_entry)`，`_on_entry` 只做 `entryAdded.emit(entry)`
-- QObject 住在主執行緒，背景執行緒 emit 時 Qt 自動以佇列方式送到主執行緒
+- `entryAdded = Signal(object)`；建構時 `buffer.add_listener(self._on_entry)`，`_on_entry` 只做 `entryAdded.emit(entry)`；`detach()` 移除 listener
+- 面板一律以 `Qt.ConnectionType.QueuedConnection` 連接 `entryAdded`：就算在主執行緒寫記錄，也等回到事件迴圈才更新面板。否則面板更新是在 loguru sink 呼叫裡同步執行，面板內任何程式再寫記錄會觸發 loguru 的重入保護（`RuntimeError: ... deadlock avoided`）
+- 面板先連接訊號、再取 `snapshot()`；收到 `seq` 不大於已顯示最後一筆的記錄直接略過，避免兩者之間寫入的記錄重複出現
 - emit 時若物件已被刪除（程式關閉中）忽略 `RuntimeError`，比照 `workers.py`
 
 ### 4.2 `ConsolePanel(QWidget)`，objectName `ConsolePanel`
@@ -141,6 +148,7 @@ class ConsolePanel(QWidget):
 | `console/height` | int | `220` | 面板高度（px） |
 | `console/levels` | str | `debug,info,success` | 開啟的等級，逗號分隔、小寫，可用值為 7 個等級名稱；可手動編輯，例如改成 `debug,info,success,error,critical` 啟動就會顯示這五種 |
 
+- 實測 QSettings INI：手動寫的 `levels=debug,info,error`（未加引號）會讀成 list，程式寫入的字串會被加上引號讀回 str；讀取時兩種都接受（list 先以逗號串接）
 - 讀取時忽略未知等級與空白；結果為空集合時（例如全部取消勾選）照樣保存為空字串，代表全部隱藏——使用者自己選的狀態要被尊重；只有鍵**不存在**時才用預設值
 - 每次變更立即 `setValue` ＋ `sync()`，比照 `ThemeManager`
 
@@ -148,9 +156,10 @@ class ConsolePanel(QWidget):
 
 - 建構子新增選填參數 `settings: QSettings | None = None`、`log_buffer: LogBuffer | None = None`；未提供時各自建立暫時物件（記憶體中的 LogBuffer、不落地的設定），既有測試不需修改
 - 右側由 `root.addWidget(self.stack, 1)` 改為垂直 `QSplitter`：上方 `stack`、下方 `ConsolePanel`；`setChildrenCollapsible(False)`，面板最小高度 120 px
-- 面板在建構時就建立（啟動時若 `console/visible=true` 直接顯示）；隱藏時以 `hide()` 處理，splitter 自動把空間還給上方
+- 面板在建構時就建立（啟動時若 `console/visible=true` 直接顯示）；程式關閉時 `console_panel.detach()` 移除 listener；隱藏時以 `hide()` 處理，splitter 自動把空間還給上方
 - footer 新增 `self.console_button = styled_button("主控台", "footer", "開關主控台 (Ctrl+`)")`，`setCheckable(True)`，搭配 `console_icon()`，排在「關於」之後
-- 新增 `toggle_console()`、`set_console_visible(bool)`：同步按鈕勾選、寫入 `console/visible`；splitter 拖曳結束（`splitterMoved`）時寫入 `console/height`
+- 新增 `toggle_console()`、`set_console_visible(bool)`：同步按鈕勾選、寫入 `console/visible`；面板高度在**關閉面板前**與**程式關閉時**寫入 `console/height`（不在拖曳過程中每移動一次就寫檔）
+- 實測：splitter 設 `setStretchFactor(0, 1)`、`(1, 0)` 後，視窗顯示前以 `setSizes([總高 - 面板高, 面板高])` 設定的高度在顯示後維持，視窗放大時多出的空間只給上方
 - `Ctrl+`` ` 為全域快捷鍵，不放進 `_workspace_shortcuts`，設定頁開著時也能用
 - 設定頁模式（`_set_settings_mode`）目前停用整個 `sidebar`，但 footer 在 sidebar 內，主控台按鈕會跟著被停用。改為**只停用 `connection_list`**，footer 三顆按鈕（主題、關於、主控台）在設定頁都維持可用；`test_main_window.py` 中檢查 `sidebar.isEnabled()` 的兩處改為檢查 `connection_list.isEnabled()`
 - `_on_theme_changed` 同時呼叫 `console_panel.set_palette(palette)`
@@ -175,7 +184,8 @@ class ConsolePanel(QWidget):
   - `QPlainTextEdit#ConsoleView`：無外框、等寬字型（`Cascadia Mono`、`Consolas`）
   - `QPushButton[variant="level"]`：膠囊形（`border-radius: 8px`、`padding: 1px 8px`、8.5pt 粗體），各等級顏色見 §6.1
   - `QPushButton[variant="footer"]:checked { border-color: $accent; background: $surface_hover; }`
-- 側欄寬 260 px，三顆 footer 按鈕（圖示 20 px ＋ 2～3 個中文字）可排在同一列；若實測超出，改縮小按鈕左右 padding，不改側欄寬度
+- 側欄寬 260 px，內容寬 236 px。實測現有 footer 樣式（`padding: 6px 12px`、間距 8）三顆按鈕合計 264 px 會超出；改為 `QPushButton[variant="footer"]` 的 `padding: 6px 7px`、footer 間距 6，合計 230 px。不改側欄寬度
+- `settings_page.palette_colors()` 目前傳出 `name`、`xml` 以外的所有欄位給外掛；改為只傳字串欄位（排除 `name`），新增的 `levels`、`level_alphas` 不會送進外掛
 
 ### 6.1 等級配色
 
@@ -209,7 +219,7 @@ class ConsolePanel(QWidget):
 
 **實作方式**
 
-- `theme.py` 新增 frozen dataclass `LevelColor(fg, hover, on)`；`ThemePalette` 新增欄位 `levels: dict[str, LevelColor]`（鍵為 `LEVELS` 的 7 個等級名稱，以 `MappingProxyType` 包成唯讀）與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框）；`LIGHT`／`DARK` 各自填入上表
+- `theme.py` 新增 frozen dataclass `LevelColor(fg, hover, on)`；`ThemePalette` 新增欄位 `levels: tuple[LevelColor, ...]`（7 個，順序同 `LEVELS`）與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框），以及方法 `level(name) -> LevelColor`；`LIGHT`／`DARK` 各自填入上表。用 tuple 而非 dict，`ThemePalette` 才能維持可 hash
 - `build_stylesheet()` 依 `levels` 產生每個等級的 4 條 QSS 規則（`QPushButton[variant="level"][level="TRACE"]` 等，共 28 條），淡色以 `rgba(r, g, b, α)` 由 `fg` 換算，不另外寫死
 - 膠囊 `border-radius` 必須小於按鈕高度的一半（實測 8px），否則 Qt 會忽略圓角畫成直角
 - 記錄行上色與按鈕共用同一組 `LevelColor`，按鈕和文字的顏色保證一致
@@ -241,7 +251,7 @@ class ConsolePanel(QWidget):
 - 等級鈕上的筆數正確（含被隱藏的等級）
 - 搜尋：不分大小寫、與等級篩選同時生效、清空搜尋還原
 - 清除會清空面板與 buffer；複製只複製可見內容
-- 主題切換後顏色改變（檢查 ERROR 行等級欄位的文字顏色 = 該主題 `levels.error.fg`）
+- 主題切換後顏色改變（檢查 ERROR 行等級欄位的文字顏色 = 該主題 `level("ERROR").fg`）
 - 自動捲動：在底端時跟著捲；往上捲後新增記錄不改變捲軸位置
 - `ConsoleSettings`：無鍵時預設值、`debug,info,success,critical` 讀出四個等級、空字串為空集合、未知等級忽略、高度非法時回預設
 
@@ -255,4 +265,4 @@ class ConsolePanel(QWidget):
 
 `tests/test_entry_point.py`
 
-- `ws_tool.py` 拆出 `setup_logging(log_dir, config) -> LogBuffer`，由 `main()` 呼叫；測試直接呼叫它：`logger.debug()` 會進 buffer，但 `level: info` 時不會寫進 `run.log`（測試結束移除加入的 sink）
+- `ws_tool.py` 拆出 `setup_logging(log_dir, config) -> tuple[LogBuffer, list[int]]`（buffer 與新增的 loguru handler id），由 `main()` 呼叫；測試直接呼叫它：`logger.debug()` 會進 buffer，但 `level: info` 時不會寫進 `run.log`（測試結束移除加入的 sink）
