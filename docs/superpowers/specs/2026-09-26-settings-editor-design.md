@@ -209,19 +209,20 @@ class SettingsPage(QWidget):
 - **F11**：工作區 → 呼叫 `settings_page.open(settings_path)` 並切換；設定頁 → 等同「返回」
 - 設定頁中 **Esc** 等同「返回」；工作區中 Esc 維持離開程式
 - **返回**：若 `is_dirty()`，詢問「儲存／不儲存／取消」；儲存失敗或取消則留在設定頁
+- 回到工作區時，若設定頁通知列仍顯示 warning／error（例如從詢問選「儲存」後的需重新啟動、找不到圖示），同樣的等級與文字轉送到工作區通知列
 - 設定頁顯示期間：左側 `Sidebar` 停用；F1～F6、Ctrl+Shift+F 快捷鍵停用；回到工作區後恢復
 - `closeEvent`：設定頁有未存檔修改時先詢問儲存／不儲存／取消，再走既有「確定要離開嗎？」
-- `saved` 訊號：`changes.hot` 非空時呼叫 `apply_app_settings(doc.app_settings())`
-- `apply_app_settings(settings: AppSettings)`：
-  - 視窗標題、側欄標題、`QApplication.setApplicationName`
-  - `self._about` 換成新的 `AboutInfo`（`website` 沿用）
-  - `img`：以 `pathutil.resource_path` 解析；檔案存在才 `QApplication.setWindowIcon`，否則保留原圖示並在設定頁顯示 warning
-  - `timeout_spin.setValue`（限制在 5～120）
+- `saved` 訊號：`changes.hot` 非空時呼叫 `apply_app_settings(doc.app_settings(), changes.hot)`
+- `apply_app_settings(settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS)`：只套用 `keys` 列出的欄位（未變更的欄位不動，例如只改名稱時保留使用者本次手動調整的逾時）
+  - `app.name`：視窗標題、側欄標題、`QApplication.setApplicationName`、`self._about.name`
+  - `app.version`、`app.copyright`：更新 `self._about` 對應欄位（`website` 沿用）
+  - `app.img`：以 `pathutil.resource_path` 解析；檔案存在才 `QApplication.setWindowIcon`，否則保留原圖示並在設定頁顯示 warning
+  - `app.timeout`：`timeout_spin.setValue`（限制在 5～120）
 - `themeChanged` 時同步呼叫 `settings_page.set_palette()`
 
 ### 6.4 `ws_tool.py`
 
-- 由 `resolve_app_dirs` 相同的基準推導 `ws_tool.yaml` 絕對路徑，傳給 `MainWindow(settings_path=...)`
+- 以 `WebServiceConfig.config_path`（程式啟動時實際讀取的 `ws_tool.yaml` 絕對路徑）傳給 `MainWindow(settings_path=...)`，確保設定頁編輯的就是正在使用的那一份
 
 ## 7. 打包
 
