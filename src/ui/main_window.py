@@ -53,7 +53,7 @@ RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 NEW_FOLDER_NAME = "新目錄"
 FOOTER_ICON_SIZE = 20
-FOOTER_SPACING = 2  # 四顆 footer 按鈕（含請求紀錄）要塞進 236 px
+FOOTER_SPACING = 6  # 三顆 footer 按鈕要塞進 236 px
 CONSOLE_SHORTCUT = "Ctrl+`"
 RECORD_SHORTCUT = "F10"
 CONSOLE_MIN_HEIGHT = 120
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
         self.record_button = None
         if self._xml_log_dir is not None:
             # 只顯示圖示：既有三顆文字按鈕已接近側欄 236 px 上限
-            self.record_button = styled_button("", "footer", f"請求紀錄 ({RECORD_SHORTCUT})")
+            self.record_button = styled_button("", "footer-icon", f"請求紀錄 ({RECORD_SHORTCUT})")
             self.record_button.setIcon(record_icon())
             self.record_button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
             footer.addWidget(self.record_button)

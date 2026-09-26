@@ -205,12 +205,13 @@ QPushButton[variant="blue"]:pressed { background: $blue_pressed; border-color: $
 QPushButton[variant="green"]:disabled, QPushButton[variant="orange"]:disabled, QPushButton[variant="blue"]:disabled {
     background: $border; border-color: $border; color: $text_muted;
 }
-QPushButton[variant="footer"] {
+QPushButton[variant="footer"], QPushButton[variant="footer-icon"] {
     background: $surface; border: 1px solid $border; border-radius: 8px;
-    padding: 6px 3px; font-size: 10.5pt; font-weight: 600;  /* 四顆 footer 按鈕（含請求紀錄）要塞進側欄 236 px */
+    padding: 6px 7px; font-size: 10.5pt; font-weight: 600;  /* 三顆 footer 按鈕要塞進側欄 236 px */
 }
-QPushButton[variant="footer"]:hover { background: $surface_hover; border-color: $accent; }
-QPushButton[variant="footer"]:checked { background: $surface_hover; border-color: $accent; }
+QPushButton[variant="footer-icon"] { padding: 6px 2px; }  /* 請求紀錄：僅圖示，留白可以更窄 */
+QPushButton[variant="footer"]:hover, QPushButton[variant="footer-icon"]:hover { background: $surface_hover; border-color: $accent; }
+QPushButton[variant="footer"]:checked, QPushButton[variant="footer-icon"]:checked { background: $surface_hover; border-color: $accent; }
 QPushButton::menu-indicator { width: 0; }
 
 QTreeWidget#ConnectionList { background: transparent; border: none; outline: 0; show-decoration-selected: 0; }
