@@ -14,10 +14,20 @@ app:
   log:
     # log path setting
     path: "app_data/logs"
-    # log level
+    # log level（run.log 門檻）
     level: info
-    # log retention days
+    # 額外分流的等級（info, debug, error, other，以逗號分隔；留空則不分流）
+    levels: "info, debug, error, other"
+    # log retention days（run.log 與 ws_*.log）
     retention: "10 days"
+    # 請求紀錄（ws_xml.log）
+    xml:
+      # 是否記錄
+      enabled: true
+      # 內容：params（參數＋回應）/ envelope（SOAP 信封）/ both
+      content: params
+      # 保留天數
+      retention: 30
   # connection path and profile setting
   connection:
     # connection path

@@ -14,10 +14,14 @@ from typing import Literal
 
 import yaml
 
+from src.core.xml_log import CONTENT_MODES
+
 FieldKind = Literal["group", "str", "int", "float", "bool", "list"]
 TIMEOUT_MIN = 5
 TIMEOUT_MAX = 120
 LOG_LEVELS = ("trace", "debug", "info", "success", "warning", "error", "critical")
+XML_RETENTION_MIN = 1
+XML_RETENTION_MAX = 3650
 HOT_RELOAD_KEYS = ("app.name", "app.version", "app.copyright", "app.img", "app.timeout")
 _BOM = "﻿"
 _KEY_LINE = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z_][\w-]*):(?P<rest>(?:[ \t].*)?)$")
@@ -129,6 +133,10 @@ def _field_for(key: str, label: str, value) -> SettingField:
         return SettingField(key, label, "int", value, (TIMEOUT_MIN, TIMEOUT_MAX))
     if key == "app.log.level" and str(value).lower() in LOG_LEVELS:
         return SettingField(key, label, "list", str(value).lower(), LOG_LEVELS)
+    if key == "app.log.xml.content" and str(value).lower() in CONTENT_MODES:
+        return SettingField(key, label, "list", str(value).lower(), CONTENT_MODES)
+    if key == "app.log.xml.retention" and isinstance(value, int) and not isinstance(value, bool):
+        return SettingField(key, label, "int", value, (XML_RETENTION_MIN, XML_RETENTION_MAX))
     if isinstance(value, bool):
         return SettingField(key, label, "bool", value)
     if isinstance(value, int):

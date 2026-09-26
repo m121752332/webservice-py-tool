@@ -9,11 +9,14 @@ from src.config.app_settings import (
     LOG_LEVELS,
     TIMEOUT_MAX,
     TIMEOUT_MIN,
+    XML_RETENTION_MAX,
+    XML_RETENTION_MIN,
     AppSettings,
     SettingsChanges,
     SettingsDocument,
     SettingsError,
 )
+from src.core.xml_log import CONTENT_MODES
 from tests.helpers import SETTINGS_YAML, write_settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -227,3 +230,44 @@ def test_save_returns_reloaded_document(doc):
     assert new_doc is not doc
     assert new_doc.values()["app.name"] == "新名稱"
     assert new_doc.changes({"app.name": "新名稱"}) == SettingsChanges(hot=(), restart=())
+
+
+XML_YAML = SETTINGS_YAML.replace(
+    '    retention: "10 days"\n',
+    '    retention: "10 days"\n'
+    "    # 額外分流的等級\n"
+    '    levels: "info, error"\n'
+    "    # 請求紀錄\n"
+    "    xml:\n"
+    "      enabled: true\n"
+    "      content: params\n"
+    "      retention: 30\n",
+)
+
+
+def test_xml_log_fields(tmp_path):
+    doc = load_text(tmp_path, XML_YAML)
+    assert field(doc, "app.log.levels").kind == "str"
+    assert field(doc, "app.log.xml").kind == "group"
+    assert field(doc, "app.log.xml.enabled").kind == "bool"
+    content = field(doc, "app.log.xml.content")
+    assert (content.kind, content.value, content.limits) == ("list", "params", CONTENT_MODES)
+    retention = field(doc, "app.log.xml.retention")
+    assert (retention.kind, retention.value, retention.limits) == ("int", 30, (XML_RETENTION_MIN, XML_RETENTION_MAX))
+
+
+@pytest.mark.parametrize("values", [
+    {"app.log.xml.retention": XML_RETENTION_MIN - 1},
+    {"app.log.xml.retention": XML_RETENTION_MAX + 1},
+    {"app.log.xml.content": "xml"},
+])
+def test_xml_log_invalid_values_raise(tmp_path, values):
+    doc = load_text(tmp_path, XML_YAML)
+    with pytest.raises(SettingsError):
+        doc.render(values)
+
+
+def test_xml_log_changes_need_restart(tmp_path):
+    doc = load_text(tmp_path, XML_YAML)
+    changes = doc.changes({"app.log.xml.content": "both", "app.log.levels": "info"})
+    assert changes == SettingsChanges(hot=(), restart=("app.log.levels", "app.log.xml.content"))
