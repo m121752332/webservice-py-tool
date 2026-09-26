@@ -4,6 +4,7 @@ from dataclasses import asdict, fields
 from pathlib import Path
 
 import pytest
+from PySide6.QtTest import QTest
 
 from src.config.app_settings import LOG_LEVELS, SettingsDocument
 from src.ui.theme import DARK, LIGHT
@@ -86,3 +87,73 @@ def test_set_palette_styles_tree(tree):
     assert LIGHT.surface in tree.tree.styleSheet()
     tree.set_palette(colors(DARK))
     assert DARK.surface in tree.tree.styleSheet()
+
+
+# ---------- 輸入中尚未提交的值 ----------
+
+def editor_widget(tree, *names):
+    """參數在樹中的編輯元件（QLineEdit 或 pyqtgraph SpinBox）"""
+    return next(iter(tree.parameters().child(*names).items)).widget
+
+
+def track(signal):
+    hits = []
+    signal.connect(lambda *args: hits.append(1))
+    return hits
+
+
+def test_typing_str_emits_editing_and_commit_applies(tree):
+    editing, changed = track(tree.valueEditing), track(tree.valueChanged)
+    line = editor_widget(tree, "app", "name")
+    line.selectAll()
+    QTest.keyClicks(line, "NEWNAME")
+    assert tree.values()["app.name"] == "TIPTOP WebService Tool"  # pyqtgraph 要等 editingFinished 才提交
+    assert editing and not changed
+    tree.commit()
+    assert tree.values()["app.name"] == "NEWNAME"
+    assert changed
+
+
+def test_typing_number_emits_editing_and_commit_applies(tree):
+    editing = track(tree.valueEditing)
+    spin = editor_widget(tree, "app", "timeout")
+    spin.lineEdit().selectAll()
+    QTest.keyClicks(spin.lineEdit(), "60")
+    assert tree.values()["app.timeout"] == 120
+    assert editing
+    tree.commit()
+    assert tree.values()["app.timeout"] == 60
+
+
+def test_commit_flushes_delayed_spin_step(tree):
+    editing = track(tree.valueEditing)
+    editor_widget(tree, "app", "timeout").stepBy(-1)  # 方向鍵／滾輪：延遲 300ms 才提交
+    assert tree.values()["app.timeout"] == 120
+    assert editing
+    tree.commit()
+    assert tree.values()["app.timeout"] == 119
+
+
+@pytest.mark.parametrize("text", ["abc", "3", "999"])
+def test_commit_ignores_invalid_number_text(tree, text):
+    spin = editor_widget(tree, "app", "timeout")
+    spin.lineEdit().selectAll()
+    QTest.keyClicks(spin.lineEdit(), text)  # 非數字或超出 5～120：比照失去焦點時捨棄
+    tree.commit()
+    assert tree.values()["app.timeout"] == 120
+    assert spin.lineEdit().text() == "120"
+
+
+def test_commit_without_edits_changes_nothing(tree, doc):
+    changed = track(tree.valueChanged)
+    tree.commit()
+    assert tree.values() == doc.values()
+    assert changed == []
+
+
+def test_programmatic_change_and_load_do_not_emit_editing(tree, doc):
+    editing = track(tree.valueEditing)
+    tree.parameters().child("app", "name").setValue("程式設定")
+    tree.parameters().child("app", "timeout").setValue(60)
+    tree.load([asdict(f) for f in doc.fields])
+    assert editing == []

@@ -55,6 +55,9 @@ class SettingsPage(QWidget):
         layout.addWidget(self.notification)
         if self.editor is not None:
             self.editor.valueChanged.connect(self._update_buttons)
+            editing = getattr(self.editor, "valueEditing", None)  # 選用：API 版本 1 的外掛可能沒有
+            if editing is not None:
+                editing.connect(self._on_editing)
             layout.addWidget(self.editor, 1)
         else:
             self.placeholder = QLabel(f"{MISSING_PLUGIN_TEXT}\n\n請將外掛資料夾放在：\n{plugin_dir()}")
@@ -85,6 +88,16 @@ class SettingsPage(QWidget):
         self._update_buttons()
 
     def is_dirty(self) -> bool:
+        """先提交輸入中的值再判斷，避免離開時漏掉尚未按 Enter 的修改"""
+        self._commit_editor()
+        return self._has_changes()
+
+    def _commit_editor(self) -> None:
+        commit = getattr(self.editor, "commit", None)  # 選用：API 版本 1 的外掛可能沒有
+        if commit is not None:
+            commit()
+
+    def _has_changes(self) -> bool:
         if self._doc is None or self.editor is None:
             return False
         try:
@@ -128,6 +141,15 @@ class SettingsPage(QWidget):
 
     @Slot()
     def _update_buttons(self) -> None:
-        dirty = self.is_dirty()
-        self.save_button.setEnabled(dirty)
-        self.revert_button.setEnabled(dirty)
+        # 不在這裡提交：輸入途中提交會讓數值欄位的文字被重新格式化
+        self._set_buttons_enabled(self._has_changes())
+
+    @Slot()
+    def _on_editing(self) -> None:
+        """使用者開始輸入就啟用按鈕；值提交後再由 _update_buttons 重新判斷"""
+        if self._doc is not None:
+            self._set_buttons_enabled(True)
+
+    def _set_buttons_enabled(self, enabled: bool) -> None:
+        self.save_button.setEnabled(enabled)
+        self.revert_button.setEnabled(enabled)

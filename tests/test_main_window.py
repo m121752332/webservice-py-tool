@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox
 
 from src.config.app_settings import TIMEOUT_MAX, AppSettings
@@ -762,3 +763,41 @@ def test_notify_routes_to_visible_page(env):
     press_shortcut(window, "F11")
     window._notify("info", "工作區訊息")
     assert window.notification.text == "工作區訊息"
+
+
+def type_setting(page, *names, text):
+    """模擬在設定頁輸入但尚未按 Enter／移開焦點（值還沒提交到參數）"""
+    line = next(iter(page.editor.parameters().child(*names).items)).widget
+    line.selectAll()
+    QTest.keyClicks(line, text)
+
+
+def test_f11_with_pending_typing_asks_and_saves(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    type_setting(page, "app", "name", text="NEWNAME")
+    assert page.save_button.isEnabled()
+    asked = []
+    window._ask_unsaved = lambda: asked.append(1) or QMessageBox.StandardButton.Save
+    press_shortcut(window, "F11")
+    assert asked == [1]
+    assert window.stack.currentWidget() is window.workspace
+    assert 'name: "NEWNAME"' in env.settings_path.read_text(encoding="utf-8")
+    assert window.windowTitle() == "NEWNAME"
+
+
+@pytest.mark.parametrize("leave", ["Esc", "back", "close"])
+def test_leaving_with_pending_typing_asks(env, leave):
+    window = env.make()
+    page = open_settings(window)
+    type_setting(page, "app", "name", text="NEWNAME")
+    asked = []
+    window._ask_unsaved = lambda: asked.append(1) or QMessageBox.StandardButton.Cancel
+    if leave == "Esc":
+        press_shortcut(window, "Esc")
+    elif leave == "back":
+        page.back_button.click()
+    else:
+        assert window.close() is False
+    assert asked == [1]
+    assert window.stack.currentWidget() is page

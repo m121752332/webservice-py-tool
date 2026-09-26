@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from PySide6.QtCore import Signal
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QWidget
 
 from src.config.app_settings import SettingsChanges, SettingsDocument, SettingsError
 from src.ui.plugin_loader import load_settings_plugin
@@ -141,3 +145,63 @@ def test_set_palette_passes_theme_colors_to_editor(page):
 def test_notify_uses_page_notification(page):
     page.notify("warning", "找不到圖示檔")
     assert (page.notification.level, page.notification.text) == ("warning", "找不到圖示檔")
+
+
+# ---------- 輸入中尚未提交的值 ----------
+
+def type_into(page, *names, text):
+    """模擬使用者輸入但尚未按 Enter／移開焦點（pyqtgraph 尚未提交到參數）"""
+    line = next(iter(page.editor.parameters().child(*names).items)).widget
+    line.selectAll()
+    QTest.keyClicks(line, text)
+
+
+def test_typing_enables_buttons_before_commit(page):
+    type_into(page, "app", "name", text="NEWNAME")
+    assert page.editor.parameters().child("app", "name").value() == "TIPTOP WebService Tool"
+    assert page.save_button.isEnabled() and page.revert_button.isEnabled()
+
+
+def test_is_dirty_commits_pending_edit(page):
+    type_into(page, "app", "name", text="NEWNAME")
+    assert page.is_dirty()
+    assert page.editor.values()["app.name"] == "NEWNAME"
+
+
+def test_save_writes_pending_edit(page, path):
+    type_into(page, "app", "name", text="NEWNAME")
+    assert page.save() is True
+    assert path.read_text(encoding="utf-8") == SETTINGS_YAML.replace("TIPTOP WebService Tool", "NEWNAME")
+    assert not page.save_button.isEnabled()
+
+
+def test_revert_discards_pending_edit(page):
+    type_into(page, "app", "name", text="NEWNAME")
+    page.revert()
+    assert page.editor.values()["app.name"] == "TIPTOP WebService Tool"
+    assert not page.is_dirty() and not page.save_button.isEnabled()
+
+
+class _MinimalTree(QWidget):
+    """只實作 API 版本 1 必要介面（沒有 commit、valueEditing）的外掛"""
+    valueChanged = Signal()
+
+    def load(self, fields):
+        self._values = {f["key"]: f["value"] for f in fields if f["kind"] != "group"}
+
+    def values(self):
+        return dict(self._values)
+
+    def set_palette(self, colors):
+        pass
+
+
+def test_plugin_without_optional_commit_still_works(qapp, path):
+    page = SettingsPage(SimpleNamespace(SettingsTree=_MinimalTree), LIGHT)
+    page.open(path)
+    assert not page.is_dirty()
+    page.editor._values["app.timeout"] = 60
+    assert page.is_dirty()
+    assert page.save() is True
+    assert "timeout: 60" in path.read_text(encoding="utf-8")
+    page.deleteLater()

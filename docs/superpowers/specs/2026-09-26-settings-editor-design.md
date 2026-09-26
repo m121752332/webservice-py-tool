@@ -147,8 +147,10 @@ API_VERSION = 1
 
 class SettingsTree(QWidget):
     valueChanged = Signal()
+    valueEditing = Signal()          # 選用
     def load(self, fields: list[dict]) -> None
     def values(self) -> dict[str, object]
+    def commit(self) -> None         # 選用
     def set_palette(self, colors: dict[str, str]) -> None
 ```
 
@@ -156,6 +158,10 @@ class SettingsTree(QWidget):
 - 每個 `Parameter` 的 `title` 為 `label`、`tip` 為 `key`；`name` 使用 key 最後一段
 - `values()` 回傳所有葉節點 `{key: 值}`
 - `load()` 期間不發出 `valueChanged`
+- pyqtgraph 的文字欄位要等 `editingFinished`、數值欄位要等編輯完成或延遲後才把值寫入參數；輸入途中 `values()` 仍是舊值：
+  - `valueEditing`：使用者輸入中（值尚未提交）時發出；程式設定值與 `load()` 不發出
+  - `commit()`：把輸入中尚未提交的值寫入參數（數值欄位的無效文字比照失去焦點時捨棄）；有值改變時照常發出 `valueChanged`
+  - 兩者皆為選用、不影響 `API_VERSION`；主程式以 `getattr` 取用，缺少時略過
 - `set_palette()` 的 `colors` 為 `ThemePalette` 除 `name`、`xml` 以外的欄位；用來設定樹的 QSS 以及 pyqtgraph 群組列的底色與文字色
 - 主程式載入外掛後檢查 `API_VERSION == 1`，不符視同未安裝
 
@@ -191,7 +197,8 @@ class SettingsPage(QWidget):
 - 版面：標題「工具參數設定」＋按鈕列「儲存」(`green`)、「還原」、「返回」(沿用 `_button`、`variant`、`HoverLift`)；下方自有 `NotificationBar`；再下方為 `SettingsTree`
 - 外掛為 `None` 時顯示佔位畫面「設定編輯器外掛未安裝」並說明外掛應放置的資料夾路徑；「儲存」「還原」停用
 - `open()` 讀檔失敗：顯示 error 通知，「儲存」停用
-- 未修改時「儲存」「還原」停用；`valueChanged` 後依 `is_dirty()` 更新
+- 未修改時「儲存」「還原」停用；`valueChanged` 後依目前值是否與檔案不同更新；`valueEditing` 時立即啟用（使用者一開始輸入即可儲存）
+- `is_dirty()` 與 `save()` 先呼叫外掛的 `commit()`，確保離開（F11／Esc／返回／關窗）前的詢問與寫回都包含輸入中尚未提交的值
 - `save()`：`SettingsDocument.save()` 失敗 → error 通知並回傳 False；成功 → 發出 `saved`，並顯示：
   - 只有熱重載欄位：success「設定已儲存並套用」
   - 含需重啟欄位：warning「已儲存，以下設定需重新啟動才會生效：app.log.level、…」
