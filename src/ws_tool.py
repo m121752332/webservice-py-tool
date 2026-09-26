@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from src.config.web_service_config import WebServiceConfig  # noqa: E402
 from src.core.connection_store import ConnectionStore  # noqa: E402
+from src.core.log_buffer import LogBuffer  # noqa: E402
 from src.core.soap_service import SoapService  # noqa: E402
 from src.ui.main_window import AboutInfo, MainWindow  # noqa: E402
 from src.ui.theme import ThemeManager  # noqa: E402
@@ -64,15 +65,24 @@ def resolve_app_dirs(config: WebServiceConfig) -> tuple[Path, Path]:
     return log_dir, data_dir
 
 
-def main() -> int:
-    config = WebServiceConfig()
-    log_dir, data_dir = resolve_app_dirs(config)
+def setup_logging(log_dir: Path, config) -> tuple[LogBuffer, list[int]]:
+    """run.log 依設定檔等級記錄；主控台暫存一律收集 TRACE 以上，回傳暫存與新增的 handler id"""
     log_dir.mkdir(parents=True, exist_ok=True)
-    logger.add(
+    file_handler = logger.add(
         os.path.join(log_dir, "run.log"),
         retention=config.app_log_retention,
         level=str(config.app_log_level).upper(),
     )
+    buffer = LogBuffer()
+    return buffer, [file_handler, buffer.attach()]
+
+
+def main() -> int:
+    config = WebServiceConfig()
+    log_dir, data_dir = resolve_app_dirs(config)
+    log_buffer, _handlers = setup_logging(log_dir, config)
+    logger.info("程式啟動 · {} {}", config.app_name, config.app_version)
+    logger.debug("設定檔={} · 連線資料={} · 記錄={}", config.config_path, data_dir, log_dir)
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.app_name)
@@ -93,6 +103,7 @@ def main() -> int:
     window = MainWindow(
         store, SoapService(), theme, about,
         default_timeout=config.app_timeout, settings_path=config.config_path,
+        settings=settings, log_buffer=log_buffer,
     )
     window.show()
     return app.exec()

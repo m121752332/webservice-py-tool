@@ -3,6 +3,7 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 from loguru import logger
 from PySide6.QtWidgets import QMessageBox
@@ -100,3 +101,21 @@ def test_worker_thread_exception_is_logged_without_dialog(qapp, monkeypatch):
 
     assert calls == []
     assert any("worker-boom" in line for line in logged)
+
+
+def test_setup_logging_buffer_gets_all_levels_but_run_log_follows_config(tmp_path):
+    from src.ws_tool import setup_logging
+
+    config = SimpleNamespace(app_log_retention="1 day", app_log_level="info")
+    buffer, handler_ids = setup_logging(tmp_path / "logs", config)
+    try:
+        logger.trace("追蹤訊息")
+        logger.debug("除錯訊息")
+        logger.info("一般訊息")
+    finally:
+        for handler_id in handler_ids:
+            logger.remove(handler_id)
+    assert [e.message for e in buffer.snapshot()][-3:] == ["追蹤訊息", "除錯訊息", "一般訊息"]
+    text = (tmp_path / "logs" / "run.log").read_text(encoding="utf-8")
+    assert "一般訊息" in text
+    assert "除錯訊息" not in text and "追蹤訊息" not in text
