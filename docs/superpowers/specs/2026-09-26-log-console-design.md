@@ -11,8 +11,8 @@
 
 - 右側區域下方可收合的主控台面板，與上方內容以可拖曳的分割線隔開；工作區與設定頁（F11）共用
 - 側欄底部「關於」後面新增「主控台」按鈕切換開關；快捷鍵 `Ctrl+`` ` 同樣可切換；面板標題列有 ✕ 可關閉
-- 收集 DEBUG 以上的全部記錄；程式啟動後、面板建立前的記錄也會保留並補顯示
-- 等級篩選（可複選的等級切換鈕），預設開啟 DEBUG、INFO；選擇結果記在 `settings.ini`，下次啟動沿用
+- 收集 TRACE 以上的全部記錄（loguru 7 個內建等級）；程式啟動後、面板建立前的記錄也會保留並補顯示
+- 等級篩選：7 個等級（TRACE、DEBUG、INFO、SUCCESS、WARNING、ERROR、CRITICAL）各一顆可複選的切換鈕，不合併；預設開啟 DEBUG、INFO；選擇結果記在 `settings.ini`，下次啟動沿用
 - 關鍵字搜尋（不分大小寫，只顯示符合的記錄）
 - 清除、複製（複製目前篩選後可見的內容）
 - 開關狀態與面板高度記在 `settings.ini`
@@ -56,18 +56,21 @@ src/ws_tool.py           修改：建立 LogBuffer 並註冊為 loguru sink，�
 ## 3. 記錄暫存（`src/core/log_buffer.py`）
 
 ```python
-LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")   # 篩選鈕的四個等級，依嚴重度排列
+# loguru 7 個內建等級，依嚴重度排列；篩選鈕一個等級一顆
+LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
+LEVEL_NO = {"TRACE": 5, "DEBUG": 10, "INFO": 20, "SUCCESS": 25, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
 DEFAULT_CAPACITY = 5000
 
 @dataclass(frozen=True)
 class LogEntry:
     time: datetime
-    level: str      # 已正規化為 LEVELS 其中之一
+    level: str      # LEVELS 其中之一
     message: str    # 含例外 traceback（多行）
 
-def normalize_level(name: str) -> str
-    # TRACE、DEBUG → DEBUG；INFO、SUCCESS → INFO；WARNING → WARNING；ERROR、CRITICAL → ERROR
-    # 自訂或未知等級依 loguru 數值（no）歸到最接近的較低等級
+def normalize_level(name: str, no: int) -> str
+    # 內建等級原樣回傳（不合併）
+    # 自訂等級（logger.level("XXX", no=...) 新增的）依數值歸到不超過它的最高內建等級，
+    # 例如 no=35 → WARNING；低於 5 → TRACE
 
 class LogBuffer:
     def __init__(self, capacity: int = DEFAULT_CAPACITY)
@@ -80,7 +83,7 @@ class LogBuffer:
 
 - 內部以 `collections.deque(maxlen=capacity)` 保存，`threading.Lock` 保護；超過上限自動丟掉最舊的
 - listener 在鎖外呼叫，listener 丟出的例外吞掉，避免記錄動作把主流程弄壞
-- `ws_tool.setup_logging()`（由 `main()` 呼叫）在加入 `run.log` sink 之後立刻 `logger.add(buffer.write, level="DEBUG", format="{message}")`；例外內容從 `record["exception"]` 自行格式化成 traceback 文字附在 message 後
+- `ws_tool.setup_logging()`（由 `main()` 呼叫）在加入 `run.log` sink 之後立刻 `logger.add(buffer.write, level="TRACE", format="{message}")`；例外內容從 `record["exception"]` 自行格式化成 traceback 文字附在 message 後
 - `run.log` sink 的等級不受影響，仍依 `ws_tool.yaml`
 
 ## 4. 面板（`src/ui/log_console.py`）
@@ -96,17 +99,19 @@ class LogBuffer:
 版面：
 
 ```
-┌ 主控台  [DEBUG 12][INFO 30][WARNING 1][ERROR 0]   [🔍 搜尋記錄…      ] [清除][複製] ✕ ┐
+┌ 主控台                                        [🔍 搜尋記錄…        ] [清除][複製] ✕ ┐
+│ (TRACE 0)(DEBUG 12)(INFO 30)(SUCCESS 4)(WARNING 1)(ERROR 3)(CRITICAL 1)            │
 │ 14:02:11.532  INFO     程式啟動 · TIPTOP WebService Tool v2.0.1                      │
-│ 14:02:15.004  INFO     讀取 WSDL · URL=http://…                                        │
+│ 14:02:15.880  SUCCESS  讀取完成 · 12 個方法                                          │
 │ …（QPlainTextEdit，唯讀、等寬字型、不自動換行）                                       │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **等級切換鈕**：四個 checkable `QPushButton`（`variant="level"`，`level` 屬性對應 QSS 顏色），文字為「等級 ＋ 目前暫存中的筆數」。預設只開 DEBUG、INFO 時，WARNING/ERROR 的筆數仍會顯示，使用者看得出有被隱藏的錯誤
+- **標題列分兩列**：第一列為標題、搜尋框、清除／複製／✕；第二列為 7 顆等級切換鈕（靠左排列）。7 顆鈕約 490 px，加上搜尋框與按鈕後超過最小視窗寬度下右側區域的 640 px，所以不擠在同一列
+- **等級切換鈕**：7 個 checkable `QPushButton`（`variant="level"`，`level` 屬性對應 QSS 顏色），依 `LEVELS` 順序排列，文字為「等級 ＋ 目前暫存中的筆數」。預設只開 DEBUG、INFO 時，其他等級的筆數仍會顯示，使用者看得出有被隱藏的錯誤或成功訊息
 - **搜尋框**：`QLineEdit`，含清除鈕；輸入後延遲 200 ms 重新篩選（避免每打一個字就重建）；比對 `message` 與等級文字，不分大小寫
 - **文字區**：`QPlainTextEdit`（objectName `ConsoleView`），不使用 `setMaximumBlockCount`（一筆 traceback 佔多行，以行數限制會切壞記錄），由面板自己保存記錄清單，超過 `DEFAULT_CAPACITY` 的 110% 時一次修剪回 `DEFAULT_CAPACITY` 筆並重建文字區（分批修剪，避免每筆新記錄都重建）；每行格式 `HH:MM:SS.mmm  LEVEL    訊息`，多行訊息（traceback）後續行縮排
-- **上色**：以 `QTextCharFormat` 分段上色，顏色取自主題色票（見 §6.1）——時間 `text_muted`；等級欄位粗體、用該等級的 `fg`；訊息 DEBUG `text_muted`、INFO `text`、WARNING／ERROR 用該等級的 `fg`；主題切換時 `set_palette()` 重新上色（重建內容）
+- **上色**：以 `QTextCharFormat` 分段上色，顏色取自主題色票（見 §6.1）——時間 `text_muted`；等級欄位粗體、用該等級的 `fg`；訊息 TRACE／DEBUG `text_muted`、INFO `text`、SUCCESS／WARNING／ERROR／CRITICAL 用該等級的 `fg`；主題切換時 `set_palette()` 重新上色（重建內容）
 - **自動捲動**：新增記錄前捲軸在最底端才跟著捲到底；使用者往上捲查看時保持位置
 - **篩選／搜尋變更**：以面板自己保存的記錄清單重新產生文字區內容
 - **清除**：清空面板與 `LogBuffer`（關掉再開不會跑回來）
@@ -134,7 +139,7 @@ class ConsolePanel(QWidget):
 |---|---|---|---|
 | `console/visible` | bool | `false` | 面板是否開啟 |
 | `console/height` | int | `220` | 面板高度（px） |
-| `console/levels` | str | `debug,info` | 開啟的等級，逗號分隔、小寫；可手動編輯，例如改成 `debug,info,error` 啟動就會顯示 ERROR |
+| `console/levels` | str | `debug,info` | 開啟的等級，逗號分隔、小寫，可用值為 7 個等級名稱；可手動編輯，例如改成 `debug,info,success,error,critical` 啟動就會顯示這五種 |
 
 - 讀取時忽略未知等級與空白；結果為空集合時（例如全部取消勾選）照樣保存為空字串，代表全部隱藏——使用者自己選的狀態要被尊重；只有鍵**不存在**時才用預設值
 - 每次變更立即 `setValue` ＋ `sync()`，比照 `ThemeManager`
@@ -167,20 +172,25 @@ class ConsolePanel(QWidget):
 - `theme.py` 新增 QSS（顏色一律用色票變數）：
   - `QWidget#ConsolePanel { background: $surface; border-top: 1px solid $border; }`
   - `QPlainTextEdit#ConsoleView`：無外框、等寬字型（`Cascadia Mono`、`Consolas`）
-  - `QPushButton[variant="level"]`：膠囊形（`border-radius: 11px`、`padding: 2px 10px`、9pt 粗體），各等級顏色見 §6.1
+  - `QPushButton[variant="level"]`：膠囊形（`border-radius: 8px`、`padding: 1px 8px`、8.5pt 粗體），各等級顏色見 §6.1
   - `QPushButton[variant="footer"]:checked { border-color: $accent; background: $surface_hover; }`
 - 側欄寬 260 px，三顆 footer 按鈕（圖示 20 px ＋ 2～3 個中文字）可排在同一列；若實測超出，改縮小按鈕左右 padding，不改側欄寬度
 
 ### 6.1 等級配色
 
-每個等級有固定的色相，讓人一眼分辨：DEBUG 灰藍（slate）、INFO 藍、WARNING 琥珀、ERROR 紅。淺色主題用較深的色階（白底上對比 ≥ 4.5:1），深色主題用較亮的色階（深底上清楚，按鈕上的字改用深色）。
+7 個等級各有固定且互不相同的色相，讓人一眼分辨。淺色主題用較深的色階（白底上對比 ≥ 4.5:1），深色主題用較亮的色階（深底上清楚，按鈕上的字改用深色）。
 
-| 等級 | 淺色 `fg` | 淺色 `hover` | 淺色 `on` | 深色 `fg` | 深色 `hover` | 深色 `on` |
-|---|---|---|---|---|---|---|
-| DEBUG | `#64748B` | `#475569` | `#FFFFFF` | `#94A3B8` | `#CBD5E1` | `#0F172A` |
-| INFO | `#2563EB` | `#1D4ED8` | `#FFFFFF` | `#60A5FA` | `#93C5FD` | `#0B1B33` |
-| WARNING | `#B45309` | `#92400E` | `#FFFFFF` | `#FBBF24` | `#FCD34D` | `#1F1300` |
-| ERROR | `#DC2626` | `#B91C1C` | `#FFFFFF` | `#F87171` | `#FCA5A5` | `#2A0A0A` |
+| 等級 | 意義 | 色相 | 淺色 `fg` | 淺色 `hover` | 淺色 `on` | 深色 `fg` | 深色 `hover` | 深色 `on` |
+|---|---|---|---|---|---|---|---|---|
+| TRACE | 非常細的程式追蹤 | 青（cyan） | `#0E7490` | `#155E75` | `#FFFFFF` | `#22D3EE` | `#67E8F9` | `#042F36` |
+| DEBUG | 開發除錯 | 灰藍（slate） | `#64748B` | `#475569` | `#FFFFFF` | `#94A3B8` | `#CBD5E1` | `#0F172A` |
+| INFO | 正常流程 | 藍 | `#2563EB` | `#1D4ED8` | `#FFFFFF` | `#60A5FA` | `#93C5FD` | `#0B1B33` |
+| SUCCESS | 成功完成 | 綠 | `#15803D` | `#166534` | `#FFFFFF` | `#4ADE80` | `#86EFAC` | `#052E16` |
+| WARNING | 異常但可繼續 | 琥珀 | `#B45309` | `#92400E` | `#FFFFFF` | `#FBBF24` | `#FCD34D` | `#1F1300` |
+| ERROR | 單次操作失敗 | 紅 | `#DC2626` | `#B91C1C` | `#FFFFFF` | `#F87171` | `#FCA5A5` | `#2A0A0A` |
+| CRITICAL | 系統級嚴重問題 | 洋紅（fuchsia） | `#A21CAF` | `#86198F` | `#FFFFFF` | `#E879F9` | `#F0ABFC` | `#3B0764` |
+
+- CRITICAL 刻意不用更深的紅：和 ERROR 同色相時，小膠囊上很難分辨，改用洋紅做出明顯區隔
 
 - `fg`：主色。勾選按鈕的底色、未勾選按鈕的文字色、記錄行的等級欄位色
 - `hover`：勾選按鈕滑鼠移入時的底色
@@ -198,11 +208,12 @@ class ConsolePanel(QWidget):
 
 **實作方式**
 
-- `theme.py` 新增 `LevelColor(fg, hover, on)` 與 `LevelColors(debug, info, warning, error)` 兩個 frozen dataclass，`ThemePalette` 新增欄位 `levels: LevelColors` 與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框）；`LIGHT`／`DARK` 各自填入上表
-- `build_stylesheet()` 依 `levels` 產生每個等級的 4 條 QSS 規則（`QPushButton[variant="level"][level="DEBUG"]` 等），淡色以 `rgba(r, g, b, α)` 由 `fg` 換算，不另外寫死
+- `theme.py` 新增 frozen dataclass `LevelColor(fg, hover, on)`；`ThemePalette` 新增欄位 `levels: dict[str, LevelColor]`（鍵為 `LEVELS` 的 7 個等級名稱，以 `MappingProxyType` 包成唯讀）與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框）；`LIGHT`／`DARK` 各自填入上表
+- `build_stylesheet()` 依 `levels` 產生每個等級的 4 條 QSS 規則（`QPushButton[variant="level"][level="TRACE"]` 等，共 28 條），淡色以 `rgba(r, g, b, α)` 由 `fg` 換算，不另外寫死
+- 膠囊 `border-radius` 必須小於按鈕高度的一半（實測 8px），否則 Qt 會忽略圓角畫成直角
 - 記錄行上色與按鈕共用同一組 `LevelColor`，按鈕和文字的顏色保證一致
-- 實測對比（WCAG）：淺色 `fg`/`surface` 4.76～5.17、`on`/`fg` 同值；深色 `fg`/`surface` 5.12～8.48、`on`/`fg` 6.62～10.93
-- `test_theme.py` 新增：兩個主題的四個等級都產生了 QSS 規則，且每個 `fg` 在 `surface` 上、`on` 在 `fg` 上的對比都 ≥ 4.5:1
+- 實測對比（WCAG）：淺色 `fg`/`surface` 4.76～6.32、`on`/`fg` 同值；深色 `fg`/`surface` 5.12～8.48、`on`/`fg` 6.09～10.93
+- `test_theme.py` 新增：兩個主題的 `levels` 都剛好涵蓋 `LEVELS` 的 7 個等級且都產生了 QSS 規則；每個 `fg` 在 `surface` 上、`on` 在 `fg` 上的對比都 ≥ 4.5:1；同一主題內 7 個 `fg` 互不相同
 
 ## 7. 錯誤處理
 
@@ -214,7 +225,8 @@ class ConsolePanel(QWidget):
 
 `tests/test_log_buffer.py`（不需 Qt）
 
-- `normalize_level`：TRACE/DEBUG/INFO/SUCCESS/WARNING/ERROR/CRITICAL 對應正確，自訂等級依數值歸類
+- `normalize_level`：7 個內建等級原樣保留（不合併）；自訂等級依數值歸類（no=35 → WARNING、no=1 → TRACE、no=60 → CRITICAL）
+- `logger.trace()` 也會進 buffer（sink 等級為 TRACE）
 - 以真實 `logger.add(buffer.write, ...)` 寫入後 `snapshot()` 內容、等級、時間正確；含例外時 message 帶 traceback
 - 超過容量丟掉最舊的；`clear()`；listener 收到新記錄、`remove_listener` 後不再收到、listener 丟例外不影響寫入
 - 多執行緒同時寫入不遺失（容量內）
@@ -223,13 +235,14 @@ class ConsolePanel(QWidget):
 
 - 面板建立時補顯示既有記錄；之後的新記錄即時出現
 - 從背景執行緒寫記錄，事件處理後出現在面板
-- 預設只顯示 DEBUG、INFO；切換 ERROR 後顯示；`levelsChanged` 帶出正確集合
+- 面板有 7 顆等級鈕，依 TRACE→CRITICAL 順序排列
+- 預設只顯示 DEBUG、INFO；TRACE、SUCCESS、CRITICAL 各自獨立切換（例如只開 SUCCESS 時看不到 INFO）；`levelsChanged` 帶出正確集合
 - 等級鈕上的筆數正確（含被隱藏的等級）
 - 搜尋：不分大小寫、與等級篩選同時生效、清空搜尋還原
 - 清除會清空面板與 buffer；複製只複製可見內容
 - 主題切換後顏色改變（檢查 ERROR 行等級欄位的文字顏色 = 該主題 `levels.error.fg`）
 - 自動捲動：在底端時跟著捲；往上捲後新增記錄不改變捲軸位置
-- `ConsoleSettings`：無鍵時預設值、`debug,info,error` 讀出三個等級、空字串為空集合、未知等級忽略、高度非法時回預設
+- `ConsoleSettings`：無鍵時預設值、`debug,info,success,critical` 讀出四個等級、空字串為空集合、未知等級忽略、高度非法時回預設
 
 `tests/test_main_window.py`（新增案例）
 
