@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import threading
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -204,3 +205,64 @@ def test_failed_call_does_not_reuse_previous_envelope():
     with pytest.raises(Exception):
         service.call(WSDL_URL, "GetPOData", "<a/>", 5)
     assert records[1].received == ""
+
+
+class BlockingTransport(HttpTransport):
+    """收到含 block_marker 的請求後卡住，等另一個執行緒放行；
+    用來重現多執行緒共用同一個 client 同時呼叫的情境"""
+
+    def __init__(self, body, block_marker: bytes, gate: threading.Event, release: threading.Event):
+        super().__init__()
+        self._body = body
+        self._block_marker = block_marker
+        self._gate = gate
+        self._release = release
+
+    def send(self, request):
+        if self._block_marker in request.message:
+            self._gate.set()
+            self._release.wait(5)
+        return Reply(200, {"Content-Type": "text/xml; charset=utf-8"}, self._body)
+
+
+def test_concurrent_calls_on_shared_client_keep_envelopes_isolated():
+    """舊實作用 client.messages（每個 client 一份，last_sent／last_received 會互相覆寫）；
+    改用 thread-local 擷取後，共用同一個 client 的兩個執行緒不會記到對方的信封"""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>'
+        '<GetPODataResponse xmlns="http://example.com/ws"><response>ok</response></GetPODataResponse>'
+        '</soap:Body></soap:Envelope>'
+    ).encode("utf-8")
+    gate = threading.Event()
+    release = threading.Event()
+    transport = BlockingTransport(body, b"FIRST-PARAM", gate, release)
+
+    def factory(url, timeout):
+        return Client(url, timeout=timeout, cache=None, transport=transport)
+
+    lock = threading.Lock()
+    records = []
+
+    def append(record):
+        with lock:
+            records.append(record)
+
+    service = SoapService(factory, recorder=append)
+
+    def call_first():
+        service.call(WSDL_URL, "GetPOData", "<FIRST-PARAM/>", 5)
+
+    first_thread = threading.Thread(target=call_first)
+    first_thread.start()
+    assert gate.wait(5)  # 等第一個呼叫送出並卡住在 transport
+    service.call(WSDL_URL, "GetPOData", "<SECOND-PARAM/>", 5)
+    release.set()
+    first_thread.join(5)
+
+    assert len(records) == 2
+    first_record = next(r for r in records if "FIRST-PARAM" in r.sent)
+    second_record = next(r for r in records if "SECOND-PARAM" in r.sent)
+    assert "SECOND-PARAM" not in first_record.sent
+    assert "FIRST-PARAM" not in second_record.sent
+    assert "GetPODataResponse" in first_record.received and "GetPODataResponse" in second_record.received

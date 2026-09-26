@@ -12,6 +12,7 @@ from datetime import datetime
 from loguru import logger
 from lxml import etree
 from suds.client import Client
+from suds.plugin import MessagePlugin
 
 from src.core.xml_log import CallRecord
 
@@ -71,8 +72,8 @@ def _param_names(client: Client, method: str) -> list[str]:
     return [str(param[0]) for param in definition.binding.input.param_defs(definition)]
 
 
-def _message_text(message) -> str:
-    """suds last_sent／last_received 的 Document 轉成文字；沒有時回傳空字串"""
+def _decode(message) -> str:
+    """suds 信封／回應轉成文字；沒有時回傳空字串"""
     if message is None:
         return ""
     if isinstance(message, bytes):
@@ -80,16 +81,39 @@ def _message_text(message) -> str:
     return str(message)
 
 
+class _EnvelopeCapture(MessagePlugin):
+    """依執行緒擷取送出／收到的信封；suds 在呼叫端執行緒呼叫 plugin，
+    thread-local 儲存讓共用同一個 client 的並行呼叫互不干擾（取消後重送、多視窗同時執行）"""
+
+    def __init__(self):
+        self._local = threading.local()
+
+    def reset(self) -> None:
+        self._local.sent = ""
+        self._local.received = ""
+
+    def sending(self, context) -> None:
+        self._local.sent = _decode(context.envelope)
+
+    def received(self, context) -> None:
+        self._local.received = _decode(context.reply)
+
+    def envelopes(self) -> tuple[str, str]:
+        return getattr(self._local, "sent", ""), getattr(self._local, "received", "")
+
+
 class SoapService:
     def __init__(self, client_factory=_default_client_factory,
                  recorder: Callable[[CallRecord], None] | None = None):
         self._client_factory = client_factory
         self._recorder = recorder
+        self._capture = _EnvelopeCapture()
         self._clients: dict[str, Client] = {}
         self._lock = threading.Lock()
 
     def load_methods(self, url: str, timeout: int) -> list[str]:
         client = self._client_factory(url, timeout)
+        client.set_options(plugins=[self._capture])
         with self._lock:
             self._clients[url] = client
         return sorted(str(name) for name in _port_methods(client))
@@ -101,14 +125,13 @@ class SoapService:
         values = split_params(raw_params)
         if len(values) != len(names):
             raise ParamCountMismatch(expected=len(names), actual=len(values))
-        client.messages.pop("tx", None)  # 避免失敗時取到上一次請求的信封
-        client.messages.pop("rx", None)
         moment = datetime.now()
         started = time.perf_counter()
+        self._capture.reset()
         try:
             result = getattr(client.service, method)(**dict(zip(names, values)))
         except Exception as err:
-            self._record(client, CallRecord(
+            self._record(CallRecord(
                 time=moment, connection=connection, url=url, method=method, status="failed",
                 elapsed=time.perf_counter() - started, size=0, error=f"{type(err).__name__}: {err}",
                 params=raw_params,
@@ -121,20 +144,19 @@ class SoapService:
         except ValueError:
             text = raw
         call_result = CallResult(text=text, elapsed=elapsed, size=len(raw.encode("utf-8")))
-        self._record(client, CallRecord(
+        self._record(CallRecord(
             time=moment, connection=connection, url=url, method=method, status="success",
             elapsed=elapsed, size=call_result.size, params=raw_params, response=text,
         ))
         return call_result
 
-    def _record(self, client: Client, record: CallRecord) -> None:
+    def _record(self, record: CallRecord) -> None:
         """補上信封後交給 recorder；recorder 出錯只寫 warning，不影響呼叫結果"""
         if self._recorder is None:
             return
         try:
-            self._recorder(replace(
-                record, sent=_message_text(client.last_sent()), received=_message_text(client.last_received()),
-            ))
+            sent, received = self._capture.envelopes()
+            self._recorder(replace(record, sent=sent, received=received))
         except Exception as err:
             logger.warning("寫入請求紀錄失敗：{}", err)
 
@@ -143,6 +165,7 @@ class SoapService:
             client = self._clients.get(url)
         if client is None:
             client = self._client_factory(url, timeout)
+            client.set_options(plugins=[self._capture])
             with self._lock:
                 self._clients[url] = client
         else:
