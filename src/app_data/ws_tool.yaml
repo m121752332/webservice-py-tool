@@ -2,7 +2,7 @@ app:
   # Name of the application
   name: "TIPTOP WebService Tool"
   # Version of the application
-  version: "v3.0.0"
+  version: "v2.0.0"
   # Description of the application
   copyright: "Copyright 2026 GameStudio. All rights reserved."
   # APP icon location
@@ -12,10 +12,15 @@ app:
 
   # Log path of the application
   log:
+    # log path setting
     path: "app_data/logs"
+    # log level
     level: info
+    # log retention days
     retention: "10 days"
-  # 服務配置檔位置
+  # connection path and profile setting
   connection:
+    # connection path
     path: "app_data"
+    # connection file name
     profile: "connections.profile"
