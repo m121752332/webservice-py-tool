@@ -62,14 +62,19 @@ def format_record(record: CallRecord, content: str = DEFAULT_CONTENT) -> str:
     lines = [f"===== {_format_time(record.time)} =====", json.dumps(meta, ensure_ascii=False)]
     for name in MODE_SECTIONS[normalize_content(content)]:
         lines.append(f"----- {SECTIONS[name]} -----")
-        lines.append(getattr(record, name).rstrip("\n"))
+        # 統一換行字元為 \n：文字模式寫檔時 Windows 會把 \n 轉成 \r\n，
+        # 若內容本身已含 \r\n 就會變成 \r\r\n，讀回來又多出一個空行
+        text = getattr(record, name).replace("\r\n", "\n").replace("\r", "\n")
+        lines.append(text.rstrip("\n"))
     return "\n".join(lines) + "\n"
 
 
 def parse_records(text: str) -> list[CallRecord]:
     """解析整個檔案內容；格式壞掉的區塊略過"""
     blocks: list[tuple[str, list[str]]] = []
-    for line in text.splitlines():
+    # 用 split("\n") 而非 splitlines()：splitlines 會額外切在 U+2028、\x85、\x0c 等字元上，
+    # 把內容裡本來合法的字元拆成多行
+    for line in text.split("\n"):
         match = _HEADER.match(line)
         if match:
             blocks.append((match.group(1), []))

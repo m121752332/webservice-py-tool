@@ -161,3 +161,19 @@ def test_stylesheet_has_rules_for_every_level(palette, tmp_path):
 def test_palettes_stay_hashable():
     hash(LIGHT)
     hash(DARK)
+
+
+@pytest.mark.parametrize("palette", [LIGHT, DARK])
+def test_header_and_tab_selectors_are_scoped_to_xml_log_viewer(palette, tmp_path):
+    """QHeaderView::section／QTabWidget::pane／QTabBar::tab 等選擇器不可全域套用，
+    否則會影響 settings_editor 外掛（pyqtgraph ParameterTree）的表頭樣式"""
+    qss = build_stylesheet(palette, write_arrow_images(palette.text_muted, tmp_path))
+    assert "QTableWidget#XmlLogTable QHeaderView::section" in qss
+    assert "QWidget#XmlLogViewer QTabWidget::pane" in qss
+    assert "QWidget#XmlLogViewer QTabBar::tab {" in qss
+    assert "QWidget#XmlLogViewer QTabBar::tab:selected" in qss
+    for line in qss.splitlines():
+        stripped = line.strip()
+        assert not stripped.startswith("QHeaderView::section")
+        assert not stripped.startswith("QTabWidget::pane")
+        assert not stripped.startswith("QTabBar::tab")

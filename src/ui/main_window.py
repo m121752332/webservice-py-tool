@@ -664,7 +664,8 @@ class MainWindow(QMainWindow):
             return
         self.connection_list.select(conn.uuid)
         index = self.method_combo.findText(record.method)
-        if index >= 0:
+        method_known = index >= 0
+        if method_known:
             self.method_combo.setCurrentIndex(index)
         else:
             self.method_combo.setEditText(record.method)
@@ -673,7 +674,13 @@ class MainWindow(QMainWindow):
             return
         self.request_editor.setPlainText(record.params)
         self.response_editor.clear()
-        self._notify("info", f"已帶回 {record.method} 的請求參數，按 F5 重新執行")
+        if method_known:
+            self._notify("info", f"已帶回 {record.method} 的請求參數，按 F5 重新執行")
+        else:
+            self._notify(
+                "warning",
+                f"已帶回參數，但此連線尚未讀取到方法 {record.method}，請先按「讀取 WSDL」",
+            )
 
     # ---------- 編輯器工具 ----------
 

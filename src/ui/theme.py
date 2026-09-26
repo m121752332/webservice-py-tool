@@ -242,13 +242,13 @@ QTableWidget#XmlLogTable {
     background: $surface; border: 1px solid $border; border-radius: 8px; outline: 0;
     selection-background-color: $surface_hover; selection-color: $text;
 }
-QHeaderView::section {
+QTableWidget#XmlLogTable QHeaderView::section {
     background: $surface; color: $text_muted; border: none; border-bottom: 1px solid $border;
     padding: 4px 8px; font-weight: 600;
 }
-QTabWidget::pane { border: 1px solid $border; border-radius: 8px; background: $surface; top: -1px; }
-QTabBar::tab { padding: 5px 14px; color: $text_muted; background: transparent; border: none; border-bottom: 2px solid transparent; }
-QTabBar::tab:selected { color: $text; border-bottom-color: $accent; }
+QWidget#XmlLogViewer QTabWidget::pane { border: 1px solid $border; border-radius: 8px; background: $surface; top: -1px; }
+QWidget#XmlLogViewer QTabBar::tab { padding: 5px 14px; color: $text_muted; background: transparent; border: none; border-bottom: 2px solid transparent; }
+QWidget#XmlLogViewer QTabBar::tab:selected { color: $text; border-bottom-color: $accent; }
 
 QStatusBar { background: $bg; border-top: 1px solid $border; }
 QStatusBar::item { border: none; }

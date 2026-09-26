@@ -1063,6 +1063,19 @@ def test_load_record_while_busy_warns(env, tmp_path):
     assert window.request_editor.toPlainText() != "<Request>new</Request>"
 
 
+def test_load_record_with_unknown_method_warns_instead_of_f5_hint(env, tmp_path):
+    """連線存在但尚未讀到該方法時，F5 重新執行只會被 _on_run_clicked 擋下來，
+    所以要提示使用者先讀取 WSDL，而不是照樣顯示「按 F5 重新執行」"""
+    seed(env.store, methods=("GetPOData",))
+    window = env.make(xml_log_dir=tmp_path)
+    window.load_record(make_record(method="UnknownMethod"))
+    assert window.method_combo.currentText() == "UnknownMethod"
+    assert window.request_editor.toPlainText() == "<Request>old</Request>"
+    assert window.notification.level == "warning"
+    assert "UnknownMethod" in window.notification.text
+    assert "F5" not in window.notification.text
+
+
 def test_load_record_without_params_keeps_editor(env, tmp_path):
     seed(env.store)
     window = env.make(xml_log_dir=tmp_path)

@@ -158,6 +158,24 @@ def test_setup_logging_split_ignores_run_level(tmp_path):
     assert "除錯訊息" not in (tmp_path / "run.log").read_text(encoding="utf-8")
 
 
+def test_setup_logging_survives_unwritable_touch(tmp_path, monkeypatch):
+    """啟動時的 touch() 若因目錄不可寫入而丟例外，不可讓 setup_logging 直接往外丟
+    （此時 excepthook 尚未安裝，例外會讓打包後的 exe 直接閃退）"""
+    from pathlib import Path
+
+    from src.ws_tool import setup_logging
+
+    def boom(self, *args, **kwargs):
+        raise OSError("拒絕存取")
+
+    monkeypatch.setattr(Path, "touch", boom)
+    config = SimpleNamespace(app_log_retention="10 days", app_log_level="info", app_log_levels="info")
+    buffer, handler_ids = setup_logging(tmp_path, config)
+    for handler_id in handler_ids:
+        logger.remove(handler_id)
+    assert buffer is not None
+
+
 def test_create_recorder_follows_config(tmp_path):
     from src.core.xml_log import XmlLogWriter
     from src.ws_tool import create_recorder

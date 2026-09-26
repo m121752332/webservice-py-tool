@@ -49,6 +49,14 @@ def test_new_fields_are_read(tmp_path, monkeypatch):
     assert (config.app_xml_enabled, config.app_xml_content, config.app_xml_retention) == (False, "both", 7)
 
 
+def test_xml_scalar_instead_of_mapping_falls_back_to_defaults(tmp_path, monkeypatch):
+    """xml: 若被寫成純量（例如 "off"）而不是 mapping，.get 會丟 AttributeError 讓 App 開不起來；
+    這時應該當作沒有設定，改用預設值"""
+    extra = '    xml: "off"\n'
+    config = make_config(tmp_path, monkeypatch, extra)
+    assert (config.app_xml_enabled, config.app_xml_content, config.app_xml_retention) == (True, "params", 30)
+
+
 def test_repo_config_has_new_fields():
     config = WebServiceConfig()
     assert config.app_log_levels == "info, debug, error, other"

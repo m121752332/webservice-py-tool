@@ -77,6 +77,17 @@ def test_writer_uses_content_mode(tmp_path):
     assert writer.content == "envelope"
 
 
+def test_writer_round_trips_crlf_and_unicode_line_separators(tmp_path):
+    """content 中若含 \\r\\n 或 U+2028 等特殊換行字元，寫入再讀回應保持原樣（不應變成雙換行或被截斷）"""
+    record = replace(RECORD, params="a\r\nb", response="x y")
+    writer = XmlLogWriter(tmp_path, "params", 30, clock=lambda: datetime(2026, 9, 26, 9))
+    writer(record)
+    writer.close()
+    result = read_records(tmp_path / "ws_xml.log")[0]
+    assert result.params == "a\nb"
+    assert result.response == "x y"
+
+
 def test_read_records_missing_file(tmp_path):
     assert read_records(tmp_path / "ws_xml.log") == []
 

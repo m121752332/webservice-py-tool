@@ -32,7 +32,8 @@ class WebServiceConfig:
         self.app_log_retention = log_config['retention']
         # 分流與請求紀錄；舊設定檔沒有這些欄位時使用預設值
         self.app_log_levels = log_config.get('levels', DEFAULT_SPLIT_LEVELS)
-        xml_config = log_config.get('xml') or {}
+        xml_config = log_config.get('xml')
+        xml_config = xml_config if isinstance(xml_config, dict) else {}
         self.app_xml_enabled = bool(xml_config.get('enabled', True))
         self.app_xml_content = xml_config.get('content', DEFAULT_CONTENT)
         self.app_xml_retention = xml_config.get('retention', DEFAULT_XML_RETENTION_DAYS)

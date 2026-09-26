@@ -253,6 +253,8 @@ class XmlLogViewer(QWidget):
             total = len(self._records)
             suffix = "" if len(self._visible) == total else f"（全部 {total} 筆）"
             self.count_label.setText(f"共 {len(self._visible)} 筆{suffix}")
+        else:
+            self.count_label.setText("尚無請求紀錄")
         if self._visible:
             self.table.selectRow(0)
         else:

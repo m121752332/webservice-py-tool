@@ -130,6 +130,18 @@ def test_read_failure_shows_error(qapp, tmp_path, monkeypatch):
     window.refresh()
     wait_until(lambda: window.notification.level == "error")
     assert window.notification.level == "error" and "拒絕存取" in window.notification.text
+    assert window.count_label.text() != "讀取中…"
+    window.close()
+
+
+def test_unparsable_log_shows_no_records_hint(qapp, tmp_path):
+    """檔案內容整份都無法解析成任何一筆紀錄時，筆數標籤不應停在「讀取中…」"""
+    (tmp_path / "ws_xml.log").write_text("garbage", encoding="utf-8")
+    window = XmlLogViewer(tmp_path, LIGHT)
+    window.refresh()
+    wait_until(lambda: window.count_label.text() != "讀取中…")
+    assert window.table.rowCount() == 0
+    assert window.count_label.text() == "尚無請求紀錄"
     window.close()
 
 
