@@ -189,42 +189,58 @@ class ConsolePanel(QWidget):
 
 ### 6.1 等級配色
 
-7 個等級各有固定且互不相同的色相，讓人一眼分辨。淺色主題用較深的色階（白底上對比 ≥ 4.5:1），深色主題用較亮的色階（深底上清楚，按鈕上的字改用深色）。
+7 個等級各有固定且互不相同的色相，讓人一眼分辨。每個等級有四個顏色：
 
-| 等級 | 意義 | 色相 | 淺色 `fg` | 淺色 `hover` | 淺色 `on` | 深色 `fg` | 深色 `hover` | 深色 `on` |
-|---|---|---|---|---|---|---|---|---|
-| TRACE | 非常細的程式追蹤 | 青（cyan） | `#0E7490` | `#155E75` | `#FFFFFF` | `#22D3EE` | `#67E8F9` | `#042F36` |
-| DEBUG | 開發除錯 | 灰藍（slate） | `#64748B` | `#475569` | `#FFFFFF` | `#94A3B8` | `#CBD5E1` | `#0F172A` |
-| INFO | 正常流程 | 藍 | `#2563EB` | `#1D4ED8` | `#FFFFFF` | `#60A5FA` | `#93C5FD` | `#0B1B33` |
-| SUCCESS | 成功完成 | 綠 | `#15803D` | `#166534` | `#FFFFFF` | `#4ADE80` | `#86EFAC` | `#052E16` |
-| WARNING | 異常但可繼續 | 琥珀 | `#B45309` | `#92400E` | `#FFFFFF` | `#FBBF24` | `#FCD34D` | `#1F1300` |
-| ERROR | 單次操作失敗 | 紅 | `#DC2626` | `#B91C1C` | `#FFFFFF` | `#F87171` | `#FCA5A5` | `#2A0A0A` |
-| CRITICAL | 系統級嚴重問題 | 洋紅（fuchsia） | `#A21CAF` | `#86198F` | `#FFFFFF` | `#E879F9` | `#F0ABFC` | `#3B0764` |
+- `fg`：文字色。未勾選按鈕的文字、記錄行的等級欄位（及 SUCCESS 以上的訊息）
+- `fill`：勾選按鈕的實心底色
+- `hover`：勾選按鈕懸浮時的底色
+- `on`：勾選按鈕（實心底）上的文字色
+
+**淺色主題**：用較深的色階，`fill` 與 `fg` 相同，實心底配白字。
+
+| 等級 | 意義 | 色相 | `fg` = `fill` | `hover` | `on` |
+|---|---|---|---|---|---|
+| TRACE | 非常細的程式追蹤 | 青（cyan） | `#0E7490` | `#155E75` | `#FFFFFF` |
+| DEBUG | 開發除錯 | 灰藍（slate） | `#64748B` | `#475569` | `#FFFFFF` |
+| INFO | 正常流程 | 藍 | `#2563EB` | `#1D4ED8` | `#FFFFFF` |
+| SUCCESS | 成功完成 | 綠 | `#15803D` | `#166534` | `#FFFFFF` |
+| WARNING | 異常但可繼續 | 琥珀 | `#B45309` | `#92400E` | `#FFFFFF` |
+| ERROR | 單次操作失敗 | 紅 | `#DC2626` | `#B91C1C` | `#FFFFFF` |
+| CRITICAL | 系統級嚴重問題 | 洋紅（fuchsia） | `#A21CAF` | `#86198F` | `#FFFFFF` |
+
+**深色主題**：文字用亮的 400 色階（深底上讀得清楚）；勾選按鈕改用**深而飽和的 700 色階實心底＋近白字**，懸浮加深到 800 色階。不用亮色實心底配深字——那樣在深灰介面上像螢光貼紙，刺眼且和深色介面「深底淺字」的慣例不一致（見預覽比較 `preview-dark-compare.png`）。
+
+| 等級 | `fg`（400） | `fill`（700） | `hover`（800） | `on` |
+|---|---|---|---|---|
+| TRACE | `#22D3EE` | `#0E7490` | `#155E75` | `#ECFEFF` |
+| DEBUG | `#94A3B8` | `#475569` | `#334155` | `#F8FAFC` |
+| INFO | `#60A5FA` | `#1D4ED8` | `#1E40AF` | `#EFF6FF` |
+| SUCCESS | `#4ADE80` | `#15803D` | `#166534` | `#F0FDF4` |
+| WARNING | `#FBBF24` | `#B45309` | `#92400E` | `#FFFBEB` |
+| ERROR | `#F87171` | `#B91C1C` | `#991B1B` | `#FEF2F2` |
+| CRITICAL | `#E879F9` | `#A21CAF` | `#86198F` | `#FDF4FF` |
 
 - CRITICAL 刻意不用更深的紅：和 ERROR 同色相時，小膠囊上很難分辨，改用洋紅做出明顯區隔
 
-- `fg`：主色。勾選按鈕的底色、未勾選按鈕的文字色、記錄行的等級欄位色
-- `hover`：勾選按鈕滑鼠移入時的底色
-- `on`：勾選按鈕（實心底）上的文字色
 - WARNING 淺色不用常見的 `#D97706`：白字在上面對比只有約 3.2:1，改用 `#B45309`（約 5:1）
 
 **按鈕狀態**（兩個狀態都有該等級的底色，靠「實心 vs 淡色」區分開關）
 
 | 狀態 | 底色 | 文字 | 外框 |
 |---|---|---|---|
-| 勾選（顯示中） | `fg` 實心 | `on` | `fg` |
-| 勾選＋懸浮 | `hover` | `on` | `hover` |
-| 未勾選（隱藏中） | `fg` 淡色（淺色 α 0.12／深色 α 0.16） | `fg` | `fg` 半透明（淺色 α 0.35／深色 α 0.45） |
-| 未勾選＋懸浮 | `fg` 淡色加深（淺色 α 0.24／深色 α 0.30） | `fg` | `fg` |
+| 勾選（顯示中） | `fill` 實心 | `on` | `fg`（淺色 α 1.0，即實色；深色 α 0.55，讓 DEBUG 等偏暗的底在深灰背景上仍有輪廓） |
+| 勾選＋懸浮 | `hover` | `on` | `fg` |
+| 未勾選（隱藏中） | `fg` 淡色（淺色 α 0.12／深色 α 0.10） | `fg` | `fg` 半透明（淺色 α 0.35／深色 α 0.35） |
+| 未勾選＋懸浮 | `fg` 淡色加深（淺色 α 0.24／深色 α 0.20） | `fg` | `fg` |
 
 **實作方式**
 
-- `theme.py` 新增 frozen dataclass `LevelColor(fg, hover, on)`；`ThemePalette` 新增欄位 `levels: tuple[LevelColor, ...]`（7 個，順序同 `LEVELS`）與 `level_alphas: tuple[float, float, float]`（淡底、懸浮、外框），以及方法 `level(name) -> LevelColor`；`LIGHT`／`DARK` 各自填入上表。用 tuple 而非 dict，`ThemePalette` 才能維持可 hash
+- `theme.py` 新增 frozen dataclass `LevelColor(fg, fill, hover, on)`；`ThemePalette` 新增欄位 `levels: tuple[LevelColor, ...]`（7 個，順序同 `LEVELS`）與 `level_alphas: tuple[float, float, float, float]`（未勾選淡底、未勾選懸浮、未勾選外框、勾選外框），以及方法 `level(name) -> LevelColor`；`LIGHT`／`DARK` 各自填入上表。用 tuple 而非 dict，`ThemePalette` 才能維持可 hash
 - `build_stylesheet()` 依 `levels` 產生每個等級的 4 條 QSS 規則（`QPushButton[variant="level"][level="TRACE"]` 等，共 28 條），淡色以 `rgba(r, g, b, α)` 由 `fg` 換算，不另外寫死
 - 膠囊 `border-radius` 必須小於按鈕高度的一半（實測 8px），否則 Qt 會忽略圓角畫成直角
 - 記錄行上色與按鈕共用同一組 `LevelColor`，按鈕和文字的顏色保證一致
-- 實測對比（WCAG）：淺色 `fg`/`surface` 4.76～6.32、`on`/`fg` 同值；深色 `fg`/`surface` 5.12～8.48、`on`/`fg` 6.09～10.93
-- `test_theme.py` 新增：兩個主題的 `levels` 都剛好涵蓋 `LEVELS` 的 7 個等級且都產生了 QSS 規則；每個 `fg` 在 `surface` 上、`on` 在 `fg` 上的對比都 ≥ 4.5:1；同一主題內 7 個 `fg` 互不相同
+- 實測對比（WCAG）：淺色 `fg`/`surface` 4.76～6.32、`on`/`fill` 同值、`on`/`hover` 更高；深色 `fg`/`surface` 5.12～8.48、`on`/`fill` 4.79～7.24、`on`/`hover` 6.81～9.90
+- `test_theme.py` 新增：兩個主題的 `levels` 都剛好涵蓋 `LEVELS` 的 7 個等級且都產生了 QSS 規則；每個 `fg` 在 `surface` 上、`on` 在 `fill` 上、`on` 在 `hover` 上的對比都 ≥ 4.5:1；同一主題內 7 個 `fg` 互不相同；淺色主題 `fill == fg`
 
 ## 7. 錯誤處理
 

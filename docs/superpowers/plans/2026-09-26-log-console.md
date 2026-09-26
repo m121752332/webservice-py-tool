@@ -313,8 +313,8 @@ git commit -F .git/COMMIT_MSG_TMP.txt && rm .git/COMMIT_MSG_TMP.txt
 **Interfaces:**
 - Consumes: `src.core.log_buffer.LEVELS`
 - Produces:
-  - `LevelColor(fg: str, hover: str, on: str)`（frozen）
-  - `ThemePalette.levels: tuple[LevelColor, ...]`（順序同 `LEVELS`）、`ThemePalette.level_alphas: tuple[float, float, float]`、`ThemePalette.level(name: str) -> LevelColor`
+  - `LevelColor(fg: str, fill: str, hover: str, on: str)`（frozen）
+  - `ThemePalette.levels: tuple[LevelColor, ...]`（順序同 `LEVELS`）、`ThemePalette.level_alphas: tuple[float, float, float, float]`、`ThemePalette.level(name: str) -> LevelColor`
   - QSS objectName／屬性：`QWidget#ConsolePanel`、`QLabel#ConsoleTitle`、`QLineEdit#ConsoleSearch`、`QPlainTextEdit#ConsoleView`、`QPushButton[variant="level"][level="<LEVEL>"]`、`QPushButton[variant="footer"]:checked`
 
 - [ ] **Step 1: 寫失敗測試**
@@ -353,7 +353,15 @@ def test_level_colors_cover_all_levels_and_are_distinct(palette):
 def test_level_colors_meet_contrast(palette):
     for name, color in zip(LEVELS, palette.levels):
         assert _contrast(color.fg, palette.surface) >= 4.5, name
-        assert _contrast(color.on, color.fg) >= 4.5, name
+        assert _contrast(color.on, color.fill) >= 4.5, name
+        assert _contrast(color.on, color.hover) >= 4.5, name
+
+
+def test_light_fill_equals_text_color_dark_fill_is_deeper():
+    assert all(color.fill == color.fg for color in LIGHT.levels)
+    # 深色主題勾選底用深色階配淺字，避免亮色實心底刺眼
+    assert all(_luminance(color.fill) < _luminance(color.fg) for color in DARK.levels)
+    assert all(_luminance(color.on) > 0.8 for color in DARK.levels)
 
 
 @pytest.mark.parametrize("palette", [LIGHT, DARK])
@@ -361,7 +369,7 @@ def test_stylesheet_has_rules_for_every_level(palette, tmp_path):
     qss = build_stylesheet(palette, write_arrow_images(palette.text_muted, tmp_path))
     for name, color in zip(LEVELS, palette.levels):
         selector = f'QPushButton[variant="level"][level="{name}"]'
-        assert f"{selector}:checked {{ background: {color.fg}; color: {color.on};" in qss
+        assert f"{selector}:checked {{ background: {color.fill}; color: {color.on};" in qss
         assert f"{selector}:checked:hover {{ background: {color.hover};" in qss
         assert f"{selector} {{ color: {color.fg}; background: rgba(" in qss
 
@@ -400,7 +408,8 @@ from src.core.log_buffer import LEVELS
 ```python
 @dataclass(frozen=True)
 class LevelColor:
-    fg: str  # 主色：勾選按鈕底色、未勾選按鈕文字色、記錄行的等級欄位色
+    fg: str  # 文字色：未勾選按鈕文字、記錄行的等級欄位
+    fill: str  # 勾選按鈕的實心底色（淺色主題與 fg 相同；深色主題用較深色階）
     hover: str  # 勾選按鈕懸浮時的底色
     on: str  # 勾選按鈕（實心底）上的文字色
 ```
@@ -409,7 +418,7 @@ class LevelColor:
 
 ```python
     levels: tuple[LevelColor, ...]  # 順序同 log_buffer.LEVELS；用 tuple 讓 ThemePalette 維持可 hash
-    level_alphas: tuple[float, float, float]  # 未勾選等級鈕：淡底、懸浮淡底、外框的不透明度
+    level_alphas: tuple[float, float, float, float]  # 未勾選淡底、未勾選懸浮淡底、未勾選外框、勾選外框的不透明度
 
     def level(self, name: str) -> LevelColor:
         return self.levels[LEVELS.index(name)]
@@ -419,30 +428,31 @@ class LevelColor:
 
 ```python
     levels=(
-        LevelColor(fg="#0E7490", hover="#155E75", on="#FFFFFF"),  # TRACE
-        LevelColor(fg="#64748B", hover="#475569", on="#FFFFFF"),  # DEBUG
-        LevelColor(fg="#2563EB", hover="#1D4ED8", on="#FFFFFF"),  # INFO
-        LevelColor(fg="#15803D", hover="#166534", on="#FFFFFF"),  # SUCCESS
-        LevelColor(fg="#B45309", hover="#92400E", on="#FFFFFF"),  # WARNING（#D97706 白字對比不足）
-        LevelColor(fg="#DC2626", hover="#B91C1C", on="#FFFFFF"),  # ERROR
-        LevelColor(fg="#A21CAF", hover="#86198F", on="#FFFFFF"),  # CRITICAL（洋紅，與 ERROR 區隔）
+        LevelColor(fg="#0E7490", fill="#0E7490", hover="#155E75", on="#FFFFFF"),  # TRACE
+        LevelColor(fg="#64748B", fill="#64748B", hover="#475569", on="#FFFFFF"),  # DEBUG
+        LevelColor(fg="#2563EB", fill="#2563EB", hover="#1D4ED8", on="#FFFFFF"),  # INFO
+        LevelColor(fg="#15803D", fill="#15803D", hover="#166534", on="#FFFFFF"),  # SUCCESS
+        LevelColor(fg="#B45309", fill="#B45309", hover="#92400E", on="#FFFFFF"),  # WARNING（#D97706 白字對比不足）
+        LevelColor(fg="#DC2626", fill="#DC2626", hover="#B91C1C", on="#FFFFFF"),  # ERROR
+        LevelColor(fg="#A21CAF", fill="#A21CAF", hover="#86198F", on="#FFFFFF"),  # CRITICAL（洋紅，與 ERROR 區隔）
     ),
-    level_alphas=(0.12, 0.24, 0.35),
+    level_alphas=(0.12, 0.24, 0.35, 1.0),
 ```
 
 `DARK` 的 `xml=...` 之後加：
 
 ```python
+    # 文字用亮的 400 色階；勾選底用深的 700 色階配近白字（亮色實心底在深色介面太刺眼），懸浮 800 色階
     levels=(
-        LevelColor(fg="#22D3EE", hover="#67E8F9", on="#042F36"),  # TRACE
-        LevelColor(fg="#94A3B8", hover="#CBD5E1", on="#0F172A"),  # DEBUG
-        LevelColor(fg="#60A5FA", hover="#93C5FD", on="#0B1B33"),  # INFO
-        LevelColor(fg="#4ADE80", hover="#86EFAC", on="#052E16"),  # SUCCESS
-        LevelColor(fg="#FBBF24", hover="#FCD34D", on="#1F1300"),  # WARNING
-        LevelColor(fg="#F87171", hover="#FCA5A5", on="#2A0A0A"),  # ERROR
-        LevelColor(fg="#E879F9", hover="#F0ABFC", on="#3B0764"),  # CRITICAL
+        LevelColor(fg="#22D3EE", fill="#0E7490", hover="#155E75", on="#ECFEFF"),  # TRACE
+        LevelColor(fg="#94A3B8", fill="#475569", hover="#334155", on="#F8FAFC"),  # DEBUG
+        LevelColor(fg="#60A5FA", fill="#1D4ED8", hover="#1E40AF", on="#EFF6FF"),  # INFO
+        LevelColor(fg="#4ADE80", fill="#15803D", hover="#166534", on="#F0FDF4"),  # SUCCESS
+        LevelColor(fg="#FBBF24", fill="#B45309", hover="#92400E", on="#FFFBEB"),  # WARNING
+        LevelColor(fg="#F87171", fill="#B91C1C", hover="#991B1B", on="#FEF2F2"),  # ERROR
+        LevelColor(fg="#E879F9", fill="#A21CAF", hover="#86198F", on="#FDF4FF"),  # CRITICAL
     ),
-    level_alphas=(0.16, 0.30, 0.45),
+    level_alphas=(0.10, 0.20, 0.35, 0.55),
 ```
 
 `_QSS` 內 footer 規則的 padding 由 `6px 12px` 改為 `6px 7px`（三顆 footer 按鈕才放得進 236 px），並在 footer 規則之後加 checked 狀態：
@@ -476,8 +486,8 @@ QPushButton[variant="level"] { border-radius: 8px; padding: 1px 8px; font-size: 
 _LEVEL_QSS = Template("""
 QPushButton[variant="level"][level="$level"] { color: $fg; background: $tint; border: 1px solid $edge; }
 QPushButton[variant="level"][level="$level"]:hover { background: $tint_hover; border-color: $fg; }
-QPushButton[variant="level"][level="$level"]:checked { background: $fg; color: $on; border-color: $fg; }
-QPushButton[variant="level"][level="$level"]:checked:hover { background: $hover; border-color: $hover; }
+QPushButton[variant="level"][level="$level"]:checked { background: $fill; color: $on; border-color: $edge_on; }
+QPushButton[variant="level"][level="$level"]:checked:hover { background: $hover; border-color: $fg; }
 """)
 
 
@@ -487,12 +497,13 @@ def _rgba(color: str, alpha: float) -> str:
 
 
 def _level_stylesheet(palette: ThemePalette) -> str:
-    """主控台等級鈕：勾選為實心等級色，未勾選為同色淡底（由 fg 換算，不另外寫死）"""
-    tint, tint_hover, edge = palette.level_alphas
+    """主控台等級鈕：勾選為實心 fill，未勾選為 fg 淡底（半透明色由 fg 換算，不另外寫死）"""
+    tint, tint_hover, edge, edge_on = palette.level_alphas
     return "".join(
         _LEVEL_QSS.substitute(
-            level=name, fg=color.fg, hover=color.hover, on=color.on,
-            tint=_rgba(color.fg, tint), tint_hover=_rgba(color.fg, tint_hover), edge=_rgba(color.fg, edge),
+            level=name, fg=color.fg, fill=color.fill, hover=color.hover, on=color.on,
+            tint=_rgba(color.fg, tint), tint_hover=_rgba(color.fg, tint_hover),
+            edge=_rgba(color.fg, edge), edge_on=_rgba(color.fg, edge_on),
         )
         for name, color in zip(LEVELS, palette.levels)
     )
