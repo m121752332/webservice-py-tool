@@ -50,6 +50,8 @@
       retention: 30
 ```
 
+`level` 與 `levels` 互相獨立：`level` 只決定 `run.log` 的門檻（和舊版相同，想要完整記錄就設成 `trace`）；分流檔只看 `levels`，不受 `level` 影響（例如 `level: info`、`levels` 含 `debug` 時，DEBUG 訊息仍會寫入 `ws_debug.log`，但不會出現在 `run.log`）。`ws_xml.log` 只看 `xml.enabled`。
+
 預設值：`levels` 為 `"info, debug, error, other"`、`xml.enabled` 為 `true`、`xml.content` 為 `params`、`xml.retention` 為 `30`。`levels` 裡無法辨識的名稱會被忽略，並寫一筆 warning；`content` 不合法時改用 `params`。
 
 `app_settings.py`：`app.log.xml.content` 在設定頁顯示成下拉選單（三個選項）；`app.log.xml.retention` 是 int，範圍 1～3650。這些 key 都屬於「需重新啟動」。
@@ -103,7 +105,7 @@ class DailyFileSink:
 - `purge_archives(log_dir, stem, retention_days, today)`：刪除符合 `^<stem>_(\d{8})\.log$`、而且日期早於 `today - retention_days` 的檔案；刪除失敗（例如檔案被占用）時忽略，下次再試
 - 所有檔案 I/O 錯誤都不可以往外丟，避免記錄動作把主流程弄壞
 - `parse_retention_days("10 days") -> 10`：接受 `"N"`、`"N day(s)"`、int；無法解析時用 10
-- `parse_levels("info, debug") -> ("info", "debug")`：不分大小寫，會去掉重複，只接受 `info/debug/error/other`
+- `parse_levels("info, debug, foo") -> (("info", "debug"), ("foo",))`：回傳（有效等級, 無法辨識的名稱）；不分大小寫，會去掉重複，只接受 `info/debug/error/other`
 
 `setup_logging` 用 loguru 預設的檔案格式（`{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}`）、`colorize=False`；分流 filter：`info/debug/error` 比對 `record["level"].name` 是否完全相同，`other` 則收其餘所有等級（包含自訂等級）。
 
@@ -176,8 +178,8 @@ call(url, method, raw_params, timeout, *, connection: str = "") -> CallResult
 `MainWindow`：
 
 - 建構子新增選填參數 `xml_log_dir: Path | None = None`；沒有給的話，紀錄按鈕與 F10 不會出現／不會生效
-- 側欄 footer 新增「紀錄」按鈕（tooltip「請求紀錄 (F10)」）；如果 236 px 放不下四顆按鈕，就縮小 `FOOTER_SPACING` 或改成只顯示圖示＋tooltip
-- `load_record(record)`：如果目前有背景工作 → 顯示 warning 通知；否則先找 URL 與名稱都相同的連線，找不到再找只有 URL 相同的，都找不到 → warning 通知「找不到對應的連線」。找到時就選取該連線，並填入方法與參數，把主視窗帶到前景，顯示 info 通知
+- 側欄 footer 最後新增「紀錄」按鈕：只顯示圖示（既有三顆文字按鈕已接近 236 px 上限），tooltip「請求紀錄 (F10)」
+- `load_record(record)`：設定頁開著時先嘗試離開（有未存檔變更會詢問，取消就中止）；如果目前有背景工作 → 顯示 warning 通知；否則先找 URL 與名稱都相同的連線，找不到再找只有 URL 相同的，都找不到 → warning 通知「找不到對應的連線」。找到時就選取該連線，並填入方法與參數，把主視窗帶到前景，顯示 info 通知；紀錄沒有保存參數（`content=envelope`）時只帶回連線與方法，並顯示 warning 說明
 
 ## 7. 錯誤處理
 
