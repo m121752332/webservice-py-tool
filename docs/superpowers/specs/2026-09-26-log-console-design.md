@@ -12,7 +12,7 @@
 - 右側區域下方可收合的主控台面板，與上方內容以可拖曳的分割線隔開；工作區與設定頁（F11）共用
 - 側欄底部「關於」後面新增「主控台」按鈕切換開關；快捷鍵 `Ctrl+`` ` 同樣可切換；面板標題列有 ✕ 可關閉
 - 收集 TRACE 以上的全部記錄（loguru 7 個內建等級）；程式啟動後、面板建立前的記錄也會保留並補顯示
-- 等級篩選：7 個等級（TRACE、DEBUG、INFO、SUCCESS、WARNING、ERROR、CRITICAL）各一顆可複選的切換鈕，不合併；預設開啟 DEBUG、INFO；選擇結果記在 `settings.ini`，下次啟動沿用
+- 等級篩選：7 個等級（TRACE、DEBUG、INFO、SUCCESS、WARNING、ERROR、CRITICAL）各一顆可複選的切換鈕，不合併；預設開啟 DEBUG、INFO、SUCCESS；選擇結果記在 `settings.ini`，下次啟動沿用
 - 關鍵字搜尋（不分大小寫，只顯示符合的記錄）
 - 清除、複製（複製目前篩選後可見的內容）
 - 開關狀態與面板高度記在 `settings.ini`
@@ -108,7 +108,7 @@ class LogBuffer:
 ```
 
 - **標題列分兩列**：第一列為標題、搜尋框、清除／複製／✕；第二列為 7 顆等級切換鈕（靠左排列）。7 顆鈕約 490 px，加上搜尋框與按鈕後超過最小視窗寬度下右側區域的 640 px，所以不擠在同一列
-- **等級切換鈕**：7 個 checkable `QPushButton`（`variant="level"`，`level` 屬性對應 QSS 顏色），依 `LEVELS` 順序排列，文字為「等級 ＋ 目前暫存中的筆數」。預設只開 DEBUG、INFO 時，其他等級的筆數仍會顯示，使用者看得出有被隱藏的錯誤或成功訊息
+- **等級切換鈕**：7 個 checkable `QPushButton`（`variant="level"`，`level` 屬性對應 QSS 顏色），依 `LEVELS` 順序排列，文字為「等級 ＋ 目前暫存中的筆數」。預設只開 DEBUG、INFO、SUCCESS 時，其他等級的筆數仍會顯示，使用者看得出有被隱藏的警告或錯誤
 - **搜尋框**：`QLineEdit`，含清除鈕；輸入後延遲 200 ms 重新篩選（避免每打一個字就重建）；比對 `message` 與等級文字，不分大小寫
 - **文字區**：`QPlainTextEdit`（objectName `ConsoleView`），不使用 `setMaximumBlockCount`（一筆 traceback 佔多行，以行數限制會切壞記錄），由面板自己保存記錄清單，超過 `DEFAULT_CAPACITY` 的 110% 時一次修剪回 `DEFAULT_CAPACITY` 筆並重建文字區（分批修剪，避免每筆新記錄都重建）；每行格式 `HH:MM:SS.mmm  LEVEL    訊息`，多行訊息（traceback）後續行縮排
 - **上色**：以 `QTextCharFormat` 分段上色，顏色取自主題色票（見 §6.1）——時間 `text_muted`；等級欄位粗體、用該等級的 `fg`；訊息 TRACE／DEBUG `text_muted`、INFO `text`、SUCCESS／WARNING／ERROR／CRITICAL 用該等級的 `fg`；主題切換時 `set_palette()` 重新上色（重建內容）
@@ -139,7 +139,7 @@ class ConsolePanel(QWidget):
 |---|---|---|---|
 | `console/visible` | bool | `false` | 面板是否開啟 |
 | `console/height` | int | `220` | 面板高度（px） |
-| `console/levels` | str | `debug,info` | 開啟的等級，逗號分隔、小寫，可用值為 7 個等級名稱；可手動編輯，例如改成 `debug,info,success,error,critical` 啟動就會顯示這五種 |
+| `console/levels` | str | `debug,info,success` | 開啟的等級，逗號分隔、小寫，可用值為 7 個等級名稱；可手動編輯，例如改成 `debug,info,success,error,critical` 啟動就會顯示這五種 |
 
 - 讀取時忽略未知等級與空白；結果為空集合時（例如全部取消勾選）照樣保存為空字串，代表全部隱藏——使用者自己選的狀態要被尊重；只有鍵**不存在**時才用預設值
 - 每次變更立即 `setValue` ＋ `sync()`，比照 `ThemeManager`
@@ -162,7 +162,8 @@ class ConsolePanel(QWidget):
 | 程式啟動 | `ws_tool.main()` | `程式啟動 · {name} {version}` |
 | 設定與資料位置 | `ws_tool.main()` | `設定檔={config_path} · 連線資料={data_dir} · 記錄={log_dir}`（DEBUG） |
 | 讀取 WSDL 開始 | `_on_load_clicked` | `讀取 WSDL · URL={url}` |
-| 讀取 WSDL 完成 | `_on_methods_loaded` | `讀取完成 · {n} 個方法` |
+| 讀取 WSDL 完成 | `_on_methods_loaded` | `讀取完成 · {n} 個方法`（SUCCESS） |
+| 請求完成 | `_on_call_finished` | 既有的 `請求完成 · …` 由 INFO 改為 SUCCESS（仍 ≥ INFO，`run.log` 照樣記錄） |
 | 取消 | `_cancel` | `已取消 {讀取/執行}` |
 | 關閉程式 | `closeEvent` 確認後 | `程式關閉` |
 
@@ -236,7 +237,7 @@ class ConsolePanel(QWidget):
 - 面板建立時補顯示既有記錄；之後的新記錄即時出現
 - 從背景執行緒寫記錄，事件處理後出現在面板
 - 面板有 7 顆等級鈕，依 TRACE→CRITICAL 順序排列
-- 預設只顯示 DEBUG、INFO；TRACE、SUCCESS、CRITICAL 各自獨立切換（例如只開 SUCCESS 時看不到 INFO）；`levelsChanged` 帶出正確集合
+- 預設只顯示 DEBUG、INFO、SUCCESS；TRACE、SUCCESS、CRITICAL 各自獨立切換（例如只開 SUCCESS 時看不到 INFO）；`levelsChanged` 帶出正確集合
 - 等級鈕上的筆數正確（含被隱藏的等級）
 - 搜尋：不分大小寫、與等級篩選同時生效、清空搜尋還原
 - 清除會清空面板與 buffer；複製只複製可見內容
@@ -250,7 +251,7 @@ class ConsolePanel(QWidget):
 - 按鈕、`Ctrl+`` `、✕ 都能切換面板，按鈕勾選狀態同步，`console/visible` 寫入 settings.ini
 - `console/visible=true` 啟動時面板直接顯示；`console/levels` 的值被套用
 - 設定頁（F11）開啟時面板仍在、主控台按鈕可用、連線清單停用
-- 執行請求後主控台出現「執行請求」與「請求完成」記錄
+- 執行請求後主控台出現「執行請求」（INFO）與「請求完成」（SUCCESS）記錄；讀取 WSDL 後出現「讀取完成」（SUCCESS）
 
 `tests/test_entry_point.py`
 
