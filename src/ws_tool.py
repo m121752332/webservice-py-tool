@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from src.config.web_service_config import WebServiceConfig  # noqa: E402
 from src.core.connection_store import ConnectionStore  # noqa: E402
+from src.core.daily_log import DailyFileSink, parse_levels, parse_retention_days  # noqa: E402
 from src.core.log_buffer import LogBuffer  # noqa: E402
 from src.core.soap_service import SoapService  # noqa: E402
 from src.ui.main_window import AboutInfo, MainWindow  # noqa: E402
@@ -65,16 +66,43 @@ def resolve_app_dirs(config: WebServiceConfig) -> tuple[Path, Path]:
     return log_dir, data_dir
 
 
+LOG_FORMAT = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
+SPLIT_EXACT = {"info": "INFO", "debug": "DEBUG", "error": "ERROR"}
+
+
+def _split_filter(split: str):
+    """info／debug／error 只收同名等級；other 收其餘所有等級（含自訂等級）"""
+    if split == "other":
+        exact = set(SPLIT_EXACT.values())
+        return lambda record: record["level"].name not in exact
+    name = SPLIT_EXACT[split]
+    return lambda record: record["level"].name == name
+
+
 def setup_logging(log_dir: Path, config) -> tuple[LogBuffer, list[int]]:
-    """run.log 依設定檔等級記錄；主控台暫存一律收集 TRACE 以上，回傳暫存與新增的 handler id"""
+    """run.log 依 level 門檻記錄；levels 列出的等級另外分流到 ws_<等級>.log（不受 level 影響）；
+    檔案每日歸檔。主控台暫存一律收集 TRACE 以上。回傳暫存與新增的 handler id"""
     log_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logger.add(
-        os.path.join(log_dir, "run.log"),
-        retention=config.app_log_retention,
-        level=str(config.app_log_level).upper(),
-    )
+    retention = parse_retention_days(config.app_log_retention)
+    handlers = [logger.add(
+        DailyFileSink(log_dir, "run", retention), level=str(config.app_log_level).upper(),
+        format=LOG_FORMAT, colorize=False,
+    )]
+    levels, unknown = parse_levels(config.app_log_levels)
+    for split in levels:
+        handlers.append(logger.add(
+            DailyFileSink(log_dir, f"ws_{split}", retention), level=0, filter=_split_filter(split),
+            format=LOG_FORMAT, colorize=False,
+        ))
     buffer = LogBuffer()
-    return buffer, [file_handler, buffer.attach()]
+    handlers.append(buffer.attach())
+    # 確保所有檔案存在，即使沒有寫入任何訊息
+    (log_dir / "run.log").touch(exist_ok=True)
+    for split in levels:
+        (log_dir / f"ws_{split}.log").touch(exist_ok=True)
+    if unknown:
+        logger.warning("log.levels 有無法辨識的名稱，已略過：{}", ", ".join(unknown))
+    return buffer, handlers
 
 
 def main() -> int:

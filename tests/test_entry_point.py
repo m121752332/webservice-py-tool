@@ -106,7 +106,7 @@ def test_worker_thread_exception_is_logged_without_dialog(qapp, monkeypatch):
 def test_setup_logging_buffer_gets_all_levels_but_run_log_follows_config(tmp_path):
     from src.ws_tool import setup_logging
 
-    config = SimpleNamespace(app_log_retention="1 day", app_log_level="info")
+    config = SimpleNamespace(app_log_retention="1 day", app_log_level="info", app_log_levels="")
     buffer, handler_ids = setup_logging(tmp_path / "logs", config)
     try:
         logger.trace("追蹤訊息")
@@ -119,3 +119,40 @@ def test_setup_logging_buffer_gets_all_levels_but_run_log_follows_config(tmp_pat
     text = (tmp_path / "logs" / "run.log").read_text(encoding="utf-8")
     assert "一般訊息" in text
     assert "除錯訊息" not in text and "追蹤訊息" not in text
+
+
+def test_setup_logging_splits_by_levels(tmp_path):
+    from src.ws_tool import setup_logging
+
+    config = SimpleNamespace(app_log_retention="10 days", app_log_level="info", app_log_levels="info, other, bogus")
+    _buffer, handler_ids = setup_logging(tmp_path, config)
+    try:
+        logger.debug("除錯訊息")
+        logger.info("一般訊息")
+        logger.warning("警告訊息")
+        logger.error("錯誤訊息")
+    finally:
+        for handler_id in handler_ids:
+            logger.remove(handler_id)
+    run = (tmp_path / "run.log").read_text(encoding="utf-8")
+    info = (tmp_path / "ws_info.log").read_text(encoding="utf-8")
+    other = (tmp_path / "ws_other.log").read_text(encoding="utf-8")
+    assert "一般訊息" in run and "錯誤訊息" in run and "除錯訊息" not in run
+    assert "一般訊息" in info and "警告訊息" not in info and "錯誤訊息" not in info
+    assert "警告訊息" in other and "bogus" in other and "一般訊息" not in other and "錯誤訊息" not in other
+    assert not (tmp_path / "ws_debug.log").exists() and not (tmp_path / "ws_error.log").exists()
+    assert "| INFO     |" in info  # 與舊版 run.log 相同的欄位格式
+
+
+def test_setup_logging_split_ignores_run_level(tmp_path):
+    from src.ws_tool import setup_logging
+
+    config = SimpleNamespace(app_log_retention="10 days", app_log_level="error", app_log_levels="debug")
+    _buffer, handler_ids = setup_logging(tmp_path, config)
+    try:
+        logger.debug("除錯訊息")
+    finally:
+        for handler_id in handler_ids:
+            logger.remove(handler_id)
+    assert "除錯訊息" in (tmp_path / "ws_debug.log").read_text(encoding="utf-8")
+    assert "除錯訊息" not in (tmp_path / "run.log").read_text(encoding="utf-8")
