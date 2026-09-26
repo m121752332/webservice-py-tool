@@ -43,3 +43,14 @@ class HoverLift(QObject):
             animation.stop()
             animation.setEndValue(end)
             animation.start()
+
+
+def styled_button(text: str, variant: str | None = None, tooltip: str = "") -> QPushButton:
+    """建立套用 variant 樣式（對應 theme.py 的 QSS selector）與懸浮效果的按鈕"""
+    button = QPushButton(text)
+    if variant:
+        button.setProperty("variant", variant)
+    if tooltip:
+        button.setToolTip(tooltip)
+    HoverLift(button)
+    return button
