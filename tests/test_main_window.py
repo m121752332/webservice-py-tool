@@ -801,3 +801,60 @@ def test_leaving_with_pending_typing_asks(env, leave):
         assert window.close() is False
     assert asked == [1]
     assert window.stack.currentWidget() is page
+
+
+def test_unsaved_save_forwards_restart_warning_to_workspace(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "log", "level").setValue("debug")
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Save
+    press_shortcut(window, "F11")
+    assert window.stack.currentWidget() is window.workspace
+    assert window.notification.level == "warning"
+    assert "app.log.level" in window.notification.text
+    assert not window.notification.isHidden()
+
+
+def test_unsaved_save_forwards_missing_icon_warning_to_workspace(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "img").setValue("not/exist.ico")
+    window._ask_unsaved = lambda: QMessageBox.StandardButton.Save
+    press_shortcut(window, "F11")
+    assert window.notification.level == "warning"
+    assert "找不到圖示檔" in window.notification.text
+
+
+def test_leaving_after_success_does_not_forward(env, app_calls):
+    window = env.make()
+    page = open_settings(window)
+    page.editor.parameters().child("app", "timeout").setValue(60)
+    page.save_button.click()
+    assert page.notification.level == "success"
+    before = (window.notification.level, window.notification.text)
+    press_shortcut(window, "F11")
+    assert (window.notification.level, window.notification.text) == before
+
+
+# ---------- 只熱重載有變更的欄位 ----------
+
+def test_apply_app_settings_only_given_keys(env, app_calls):
+    window = env.make()
+    window.timeout_spin.setValue(40)
+    window.apply_app_settings(AppSettings("新名稱", "v9.9.9", "新版權", "not/exist.ico", 60), keys=("app.version",))
+    assert window._about == AboutInfo(ABOUT.name, "v9.9.9", ABOUT.copyright, ABOUT.website)
+    assert window.windowTitle() != "新名稱" and app_calls.names == []
+    assert app_calls.icons == [] and "找不到圖示檔" not in window.notification.text
+    assert window.timeout_spin.value() == 40
+
+
+def test_saving_name_only_keeps_session_timeout_and_icon(env, app_calls):
+    window = env.make()
+    window.timeout_spin.setValue(40)
+    page = open_settings(window)
+    page.editor.parameters().child("app", "name").setValue("新名稱")
+    page.save_button.click()
+    assert window.windowTitle() == "新名稱"
+    assert window._about.name == "新名稱"
+    assert window.timeout_spin.value() == 40
+    assert app_calls.icons == []

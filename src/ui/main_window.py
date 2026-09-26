@@ -2,6 +2,7 @@
 """
 主視窗：左側連線清單 + 右側工作區
 """
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.config.app_settings import TIMEOUT_MAX, TIMEOUT_MIN, AppSettings
+from src.config.app_settings import HOT_RELOAD_KEYS, TIMEOUT_MAX, TIMEOUT_MIN, AppSettings
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
@@ -641,7 +642,14 @@ class MainWindow(QMainWindow):
             return False
         self.stack.setCurrentWidget(self.workspace)
         self._set_settings_mode(False)
+        self._forward_settings_notice()
         return True
+
+    def _forward_settings_notice(self) -> None:
+        """設定頁上仍顯示的 warning／error（例如從離開詢問選「儲存」後的需重啟提示）轉到工作區，免得看不到"""
+        bar = self.settings_page.notification
+        if not bar.isHidden() and bar.level in ("warning", "error"):
+            self.notification.show_message(bar.level, bar.text)
 
     def _set_settings_mode(self, active: bool) -> None:
         """設定頁顯示期間停用左側清單與工作區快捷鍵，避免在看不到的地方送出請求"""
@@ -669,7 +677,7 @@ class MainWindow(QMainWindow):
     @Slot(object, object)
     def _on_settings_saved(self, doc, changes) -> None:
         if changes.hot:
-            self.apply_app_settings(doc.app_settings())
+            self.apply_app_settings(doc.app_settings(), changes.hot)
 
     # ---------- 狀態、通知、主題 ----------
 
@@ -697,19 +705,28 @@ class MainWindow(QMainWindow):
         if self.settings_page is not None:
             self.settings_page.set_palette(palette)
 
-    def apply_app_settings(self, settings: AppSettings) -> None:
-        """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout"""
-        self._about = replace(self._about, name=settings.name, version=settings.version, copyright=settings.copyright)
-        self.setWindowTitle(settings.name)
-        self.app_title.setText(settings.name)
-        QApplication.setApplicationName(settings.name)
-        icon_path = Path(pathutil.resource_path(settings.img))
-        if icon_path.is_file():
-            QApplication.setWindowIcon(QIcon(str(icon_path)))
-        else:
-            logger.warning("找不到圖示檔：{}", icon_path)
-            self._notify("warning", f"找不到圖示檔 {settings.img}，保留原圖示")
-        self.timeout_spin.setValue(min(max(settings.timeout, TIMEOUT_MIN), TIMEOUT_MAX))
+    def apply_app_settings(self, settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS) -> None:
+        """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout；只套用 keys 列出的欄位"""
+        keys = set(keys)
+        if "app.name" in keys:
+            self._about = replace(self._about, name=settings.name)
+            self.setWindowTitle(settings.name)
+            self.app_title.setText(settings.name)
+            QApplication.setApplicationName(settings.name)
+        if "app.version" in keys:
+            self._about = replace(self._about, version=settings.version)
+        if "app.copyright" in keys:
+            self._about = replace(self._about, copyright=settings.copyright)
+        if "app.img" in keys:
+            icon_path = Path(pathutil.resource_path(settings.img))
+            if icon_path.is_file():
+                QApplication.setWindowIcon(QIcon(str(icon_path)))
+            else:
+                logger.warning("找不到圖示檔：{}", icon_path)
+                self._notify("warning", f"找不到圖示檔 {settings.img}，保留原圖示")
+        if "app.timeout" in keys:
+            # 只有檔案中的 timeout 改了才覆寫，保留使用者本次手動調整的逾時
+            self.timeout_spin.setValue(min(max(settings.timeout, TIMEOUT_MIN), TIMEOUT_MAX))
 
     def _show_about(self) -> None:
         about = self._about
