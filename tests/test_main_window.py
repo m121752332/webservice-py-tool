@@ -4,14 +4,15 @@ from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
-from PySide6.QtWidgets import QAbstractItemView
+from PySide6.QtGui import QGuiApplication, QKeySequence, QPixmap, QShortcut
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox
 
+from src.config.app_settings import TIMEOUT_MAX, AppSettings
 from src.core.connection_store import ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
 from src.ui.theme import DARK, ThemeManager, ThemeMode
-from tests.helpers import wait_until
+from tests.helpers import wait_until, write_settings
 
 ABOUT = AboutInfo("WebService 測試工具", "v2.0.0", "Copyright", "https://example.com")
 
@@ -48,12 +49,17 @@ def env(qapp, tmp_path):
     service = FakeService()
     theme = ThemeManager(qapp, QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
     theme.apply()
-    ctx = SimpleNamespace(store=ConnectionStore(tmp_path / "connections.profile"), service=service, theme=theme)
+    settings_path = write_settings(tmp_path / "ws_tool.yaml")
+    ctx = SimpleNamespace(
+        store=ConnectionStore(tmp_path / "connections.profile"), service=service, theme=theme,
+        settings_path=settings_path,
+    )
     windows = []
 
     def make(store=None):
-        window = MainWindow(store or ctx.store, service, theme, ABOUT, default_timeout=30)
+        window = MainWindow(store or ctx.store, service, theme, ABOUT, default_timeout=30, settings_path=settings_path)
         window._confirm = lambda title, text: True
+        window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
         windows.append(window)
         return window
 
@@ -63,6 +69,7 @@ def env(qapp, tmp_path):
         service.gate.set()
     for window in windows:
         window._confirm = lambda title, text: True
+        window._ask_unsaved = lambda: QMessageBox.StandardButton.Discard
         window.close()
         window.deleteLater()
 
@@ -561,3 +568,43 @@ def test_rebuild_keeps_current_connections_selected_method(env):
     window.method_combo.setCurrentText("B")
     window.connection_list.connectionMoved.emit(uuid, None, 0)  # 觸發重建，該連線仍是目前選取
     assert window.method_combo.currentText() == "B"
+
+
+# ---------- 熱重載工具參數 ----------
+
+@pytest.fixture
+def app_calls(monkeypatch):
+    """攔截 QApplication 的全域設定，避免測試互相影響"""
+    calls = SimpleNamespace(icons=[], names=[])
+    monkeypatch.setattr(QApplication, "setWindowIcon", lambda icon: calls.icons.append(icon))
+    monkeypatch.setattr(QApplication, "setApplicationName", lambda name: calls.names.append(name))
+    return calls
+
+
+def test_apply_app_settings_updates_window(env, app_calls, tmp_path):
+    icon_path = tmp_path / "icon.png"
+    pixmap = QPixmap(16, 16)
+    pixmap.fill()
+    pixmap.save(str(icon_path))
+    window = env.make()
+    window.apply_app_settings(AppSettings("新名稱", "v9.9.9", "新版權", str(icon_path), 60))
+    assert window.windowTitle() == "新名稱"
+    assert window.app_title.text() == "新名稱"
+    assert window._about == AboutInfo("新名稱", "v9.9.9", "新版權", ABOUT.website)
+    assert app_calls.names == ["新名稱"]
+    assert len(app_calls.icons) == 1
+    assert window.timeout_spin.value() == 60
+
+
+def test_apply_app_settings_clamps_timeout(env, app_calls):
+    window = env.make()
+    window.apply_app_settings(AppSettings("n", "v", "c", "assets/app_icon.ico", 500))
+    assert window.timeout_spin.value() == TIMEOUT_MAX
+
+
+def test_apply_app_settings_missing_icon_keeps_old_and_warns(env, app_calls):
+    window = env.make()
+    window.apply_app_settings(AppSettings("n", "v", "c", "not/exist.ico", 30))
+    assert app_calls.icons == []
+    assert window.notification.level == "warning"
+    assert "找不到圖示檔" in window.notification.text

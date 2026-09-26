@@ -3,15 +3,17 @@
 # @Author : Tiger
 # @File : ConnectionManager.py
 # @Software: vscode
+from pathlib import Path
+
 from src.utils import yaml_values, pathutil
 
 
 class WebServiceConfig:
 
     def __init__(self):
-        self.app_config = yaml_values.load_yaml_file(
-            pathutil.resource_abspath('app_data\\ws_tool.yaml')
-        )
+        # 實際讀取的設定檔位置；設定頁也寫回同一個檔案
+        self.config_path = Path(pathutil.resource_abspath('app_data\\ws_tool.yaml'))
+        self.app_config = yaml_values.load_yaml_file(self.config_path)
 
         # APP 配置
         self.app_name = self.app_config['app']['name']

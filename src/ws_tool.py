@@ -90,7 +90,10 @@ def main() -> int:
         copyright=config.get_app_copyright(),
         website=GITHUB_URL,
     )
-    window = MainWindow(store, SoapService(), theme, about, default_timeout=config.get_app_timeout())
+    window = MainWindow(
+        store, SoapService(), theme, about,
+        default_timeout=config.get_app_timeout(), settings_path=config.config_path,
+    )
     window.show()
     return app.exec()
 

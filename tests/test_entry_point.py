@@ -66,6 +66,7 @@ def test_resolve_app_dirs_uses_config_file_location_as_base(tmp_path, monkeypatc
     monkeypatch.setattr(globalvalues, "EXE_PATH", "")
 
     config = WebServiceConfig()
+    assert config.config_path == app_data / "ws_tool.yaml"
     log_dir, data_dir = resolve_app_dirs(config)
 
     assert data_dir == app_data

@@ -2,12 +2,14 @@
 """
 主視窗：左側連線清單 + 右側工作區
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 
 from loguru import logger
 from PySide6.QtCore import QSize, Qt, Slot
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QIcon, QKeySequence, QShortcut, QTextCursor
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QCompleter,
     QFrame,
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.config.app_settings import TIMEOUT_MAX, TIMEOUT_MIN, AppSettings
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
@@ -33,10 +36,9 @@ from src.ui.notification_bar import NotificationBar
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
+from src.utils import pathutil
 
 XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
-TIMEOUT_MIN = 5
-TIMEOUT_MAX = 120
 LOG_TEXT_CAP = 2000
 LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
@@ -77,12 +79,13 @@ def _caption(text: str) -> QLabel:
 
 class MainWindow(QMainWindow):
     def __init__(self, store: ConnectionStore, service, theme: ThemeManager, about: AboutInfo,
-                 default_timeout: int, parent=None):
+                 default_timeout: int, settings_path: Path, parent=None):
         super().__init__(parent)
         self._store = store
         self._service = service
         self._theme = theme
         self._about = about
+        self._settings_path = Path(settings_path)
         self._current_uuid: str | None = None
         self._methods: list[str] = []
         self._pending = None  # 進行中工作的 tag：(kind, seq, uuid)
@@ -106,7 +109,8 @@ class MainWindow(QMainWindow):
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_sidebar())
+        self.sidebar = self._build_sidebar()
+        root.addWidget(self.sidebar)
         root.addWidget(self._build_workspace(default_timeout), 1)
         self.setCentralWidget(central)
 
@@ -125,9 +129,9 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(8)
 
-        title = QLabel(self._about.name)
-        title.setObjectName("AppTitle")
-        title.setWordWrap(True)
+        self.app_title = QLabel(self._about.name)
+        self.app_title.setObjectName("AppTitle")
+        self.app_title.setWordWrap(True)
         self.connection_list = ConnectionList()
 
         self.theme_button = styled_button("主題", "footer", "切換淺色 / 深色主題")
@@ -142,7 +146,7 @@ class MainWindow(QMainWindow):
         footer.addWidget(self.about_button)
         footer.addStretch(1)
 
-        layout.addWidget(title)
+        layout.addWidget(self.app_title)
         layout.addWidget(self.connection_list, 1)
         layout.addLayout(footer)
         return sidebar
@@ -608,6 +612,20 @@ class MainWindow(QMainWindow):
         self.response_editor.set_colors(palette.xml)
         for mode, action in self.theme_actions.items():
             action.setChecked(mode is self._theme.mode)
+
+    def apply_app_settings(self, settings: AppSettings) -> None:
+        """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout"""
+        self._about = replace(self._about, name=settings.name, version=settings.version, copyright=settings.copyright)
+        self.setWindowTitle(settings.name)
+        self.app_title.setText(settings.name)
+        QApplication.setApplicationName(settings.name)
+        icon_path = Path(pathutil.resource_path(settings.img))
+        if icon_path.is_file():
+            QApplication.setWindowIcon(QIcon(str(icon_path)))
+        else:
+            logger.warning("找不到圖示檔：{}", icon_path)
+            self._notify("warning", f"找不到圖示檔 {settings.img}，保留原圖示")
+        self.timeout_spin.setValue(min(max(settings.timeout, TIMEOUT_MIN), TIMEOUT_MAX))
 
     def _show_about(self) -> None:
         about = self._about
