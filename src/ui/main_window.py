@@ -52,8 +52,9 @@ LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 NEW_FOLDER_NAME = "新目錄"
+SIDEBAR_WIDTH = 292  # 四顆 footer 按鈕（主題／關於／主控台／請求紀錄）要塞進側欄
 FOOTER_ICON_SIZE = 20
-FOOTER_SPACING = 6  # 三顆 footer 按鈕要塞進 236 px
+FOOTER_SPACING = 6  # 四顆 footer 按鈕要塞進側欄內容寬度 268 px（292 - 左右邊界各 12）
 CONSOLE_SHORTCUT = "Ctrl+`"
 RECORD_SHORTCUT = "F10"
 CONSOLE_MIN_HEIGHT = 120
@@ -156,7 +157,7 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(260)
+        sidebar.setFixedWidth(SIDEBAR_WIDTH)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(8)
@@ -183,7 +184,7 @@ class MainWindow(QMainWindow):
         footer.addWidget(self.console_button)
         self.record_button = None
         if self._xml_log_dir is not None:
-            # 只顯示圖示：既有三顆文字按鈕已接近側欄 236 px 上限
+            # 只顯示圖示：搭配加寬後的側欄（292 px），四顆 footer 按鈕維持原本留白
             self.record_button = styled_button("", "footer-icon", f"請求紀錄 ({RECORD_SHORTCUT})")
             self.record_button.setIcon(record_icon())
             self.record_button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
