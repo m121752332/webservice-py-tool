@@ -22,6 +22,7 @@ from src.core.connection_store import ConnectionStore  # noqa: E402
 from src.core.daily_log import DailyFileSink, parse_levels, parse_retention_days  # noqa: E402
 from src.core.log_buffer import LogBuffer  # noqa: E402
 from src.core.soap_service import SoapService  # noqa: E402
+from src.core.xml_log import DEFAULT_XML_RETENTION_DAYS, XmlLogWriter, normalize_content  # noqa: E402
 from src.ui.main_window import AboutInfo, MainWindow  # noqa: E402
 from src.ui.theme import ThemeManager  # noqa: E402
 from src.utils import path_util  # noqa: E402
@@ -105,6 +106,17 @@ def setup_logging(log_dir: Path, config) -> tuple[LogBuffer, list[int]]:
     return buffer, handlers
 
 
+def create_recorder(log_dir: Path, config) -> XmlLogWriter | None:
+    """依 log.xml 設定建立請求紀錄寫入器；停用時回傳 None"""
+    if not config.app_xml_enabled:
+        return None
+    content = normalize_content(config.app_xml_content)
+    if content != str(config.app_xml_content).strip().lower():
+        logger.warning("log.xml.content 無法辨識（{}），改用 {}", config.app_xml_content, content)
+    retention = parse_retention_days(config.app_xml_retention, DEFAULT_XML_RETENTION_DAYS)
+    return XmlLogWriter(log_dir, content, retention)
+
+
 def main() -> int:
     config = WebServiceConfig()
     log_dir, data_dir = resolve_app_dirs(config)
@@ -129,7 +141,7 @@ def main() -> int:
         website=GITHUB_URL,
     )
     window = MainWindow(
-        store, SoapService(), theme, about,
+        store, SoapService(recorder=create_recorder(log_dir, config)), theme, about,
         default_timeout=config.app_timeout, settings_path=config.config_path,
         settings=settings, log_buffer=log_buffer,
     )

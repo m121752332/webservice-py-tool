@@ -519,16 +519,19 @@ class MainWindow(QMainWindow):
         params = self.request_editor.toPlainText()
         logger.info("執行請求 · URL={} · 方法={} · 參數={}", url, method, _cap(params))
         self._run_context = (url, method)
-        self._start("run", self._service.call, url, method, params, self.timeout_spin.value())
+        self._start(
+            "run", self._service.call, url, method, params, self.timeout_spin.value(),
+            connection=self.name_edit.text().strip(),
+        )
 
-    def _start(self, kind: str, fn, *args) -> None:
+    def _start(self, kind: str, fn, *args, **kwargs) -> None:
         self._seq += 1
         tag = (kind, self._seq, self._current_uuid)
         self._pending = tag
         self._set_busy(kind)
         self._set_status("busy", "讀取中…" if kind == "load" else "執行中…")
         self._tasks[tag] = run_in_background(
-            tag, fn, *args, on_success=self._on_task_succeeded, on_failure=self._on_task_failed
+            tag, fn, *args, on_success=self._on_task_succeeded, on_failure=self._on_task_failed, **kwargs,
         )
 
     def _cancel(self) -> None:

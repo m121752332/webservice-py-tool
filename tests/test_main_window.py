@@ -31,6 +31,7 @@ class FakeService:
         self.error = None
         self.gate = None
         self.calls = []
+        self.connections = []
 
     def _block_or_fail(self):
         if self.gate is not None:
@@ -43,8 +44,9 @@ class FakeService:
         self._block_or_fail()
         return list(self.methods)
 
-    def call(self, url, method, raw_params, timeout):
+    def call(self, url, method, raw_params, timeout, connection=""):
         self.calls.append(("call", url, method, raw_params, timeout))
+        self.connections.append(connection)
         self._block_or_fail()
         return self.result
 
@@ -352,6 +354,14 @@ def test_run_success_shows_response_and_stats(env):
     assert window.status_detail.text() == "0.12 s · 5 B"
     assert window.run_button.text() == RUN_LABEL
     assert env.service.calls == [("call", "http://prod/ws?WSDL", "GetPOData", "<Request/>", 45)]
+
+
+def test_run_passes_connection_name(env):
+    seed(env.store, name="訂單服務")
+    window = env.make()
+    window.run_button.click()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert env.service.connections == ["訂單服務"]
 
 
 def test_run_requires_known_method(env):

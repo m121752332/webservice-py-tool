@@ -156,3 +156,15 @@ def test_setup_logging_split_ignores_run_level(tmp_path):
             logger.remove(handler_id)
     assert "除錯訊息" in (tmp_path / "ws_debug.log").read_text(encoding="utf-8")
     assert "除錯訊息" not in (tmp_path / "run.log").read_text(encoding="utf-8")
+
+
+def test_create_recorder_follows_config(tmp_path):
+    from src.core.xml_log import XmlLogWriter
+    from src.ws_tool import create_recorder
+
+    off = SimpleNamespace(app_xml_enabled=False, app_xml_content="params", app_xml_retention=30)
+    assert create_recorder(tmp_path, off) is None
+    on = SimpleNamespace(app_xml_enabled=True, app_xml_content="BOTH", app_xml_retention="7 days")
+    recorder = create_recorder(tmp_path, on)
+    assert isinstance(recorder, XmlLogWriter) and recorder.content == "both"
+    recorder.close()

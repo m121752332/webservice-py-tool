@@ -144,3 +144,63 @@ def test_call_updates_timeout_on_cached_client():
     service.call(WSDL_URL, "GetPOData", "<r/>", 30)
     assert len(factory.clients) == 1
     assert factory.clients[0].options.timeout == 30
+
+
+class BrokenTransport(HttpTransport):
+    def send(self, request):
+        raise ConnectionError("連線被拒")
+
+
+def broken_factory(url, timeout):
+    return Client(url, timeout=timeout, cache=None, transport=BrokenTransport())
+
+
+def test_call_records_success_with_envelopes():
+    records = []
+    service = SoapService(FakeClientFactory(response_text="<r>好</r>"), recorder=records.append)
+    result = service.call(WSDL_URL, "GetPOData", "<a/>", 5, connection="訂單")
+    [record] = records
+    assert (record.connection, record.url, record.method, record.status, record.error) == (
+        "訂單", WSDL_URL, "GetPOData", "success", "",
+    )
+    assert (record.params, record.response, record.size) == ("<a/>", result.text, result.size)
+    assert "Envelope" in record.sent and "GetPOData" in record.sent
+    assert "GetPODataResponse" in record.received
+    assert record.elapsed >= 0
+
+
+def test_call_records_failure_and_reraises():
+    records = []
+    service = SoapService(broken_factory, recorder=records.append)
+    with pytest.raises(Exception, match="連線被拒"):
+        service.call(WSDL_URL, "GetPOData", "<a/>", 5)
+    [record] = records
+    assert record.status == "failed" and "連線被拒" in record.error and record.response == ""
+    assert record.received == ""
+
+
+def test_param_mismatch_is_not_recorded():
+    records = []
+    service = SoapService(FakeClientFactory(), recorder=records.append)
+    with pytest.raises(ParamCountMismatch):
+        service.call(WSDL_URL, "GetPOData", "<a/>#~#<b/>", 5)
+    assert records == []
+
+
+def test_recorder_error_does_not_break_call():
+    def boom(_record):
+        raise RuntimeError("寫檔失敗")
+
+    service = SoapService(FakeClientFactory(), recorder=boom)
+    assert service.call(WSDL_URL, "GetPOData", "<a/>", 5).text
+
+
+def test_failed_call_does_not_reuse_previous_envelope():
+    records = []
+    factory = FakeClientFactory()
+    service = SoapService(factory, recorder=records.append)
+    service.call(WSDL_URL, "GetPOData", "<a/>", 5)
+    factory.clients[0].set_options(transport=BrokenTransport())
+    with pytest.raises(Exception):
+        service.call(WSDL_URL, "GetPOData", "<a/>", 5)
+    assert records[1].received == ""
