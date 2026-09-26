@@ -64,5 +64,15 @@ if errorlevel 1 (
 )
 
 echo.
-echo Build process finished: dist\WebService-Tool.exe + dist\plugins\settings_editor
+echo Copying app_data\ws_tool.yaml into dist (always overwritten to match repo)...
+if not exist "dist\app_data" mkdir "dist\app_data"
+copy /y "src\app_data\ws_tool.yaml" "dist\app_data\ws_tool.yaml" >nul
+if errorlevel 1 (
+    echo [ERROR] Failed to copy ws_tool.yaml.
+    pause
+    exit /b 1
+)
+
+echo.
+echo Build process finished: dist\WebService-Tool.exe + dist\plugins\settings_editor + dist\app_data\ws_tool.yaml
 pause
