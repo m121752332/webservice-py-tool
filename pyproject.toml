@@ -10,6 +10,14 @@ dependencies = [
     "suds>=1.2.0",
 ]
 
+[project.scripts]
+test = "tasks.test:main"
+lint = "tasks.lint:main"
+build = "tasks.build:main"
+package = "tasks.package:main"
+clean = "tasks.clean:main"
+clean-package = "tasks.clean_package:main"
+
 [dependency-groups]
 dev = [
     "numpy==2.5.3",
@@ -17,6 +25,8 @@ dev = [
     "pyqtgraph==0.14.0",
     "pyqtinspect>=0.5.0",
     "pytest>=9.1.1",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.14.4",
 ]
 
 [tool.uv]
@@ -25,3 +35,20 @@ required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-n auto"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tasks"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# 只抓明顯的語法／邏輯錯誤（pyflakes）與少量 pycodestyle 錯誤；
+# 不啟用 pyupgrade（會要求移除 AGENTS.md 規定要保留的 coding 宣告）或 isort 排序規則。
+select = ["E", "F"]
+ignore = ["E501"]

@@ -40,7 +40,7 @@ from src.ui.settings_page import SettingsPage
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
-from src.utils import pathutil
+from src.utils import path_util
 
 XML_DECLARATION = '<?xml version="1.0" encoding="utf-8"?>'
 LOG_TEXT_CAP = 2000
@@ -718,7 +718,7 @@ class MainWindow(QMainWindow):
         if "app.copyright" in keys:
             self._about = replace(self._about, copyright=settings.copyright)
         if "app.img" in keys:
-            icon_path = Path(pathutil.resource_path(settings.img))
+            icon_path = Path(path_util.resource_path(settings.img))
             if icon_path.is_file():
                 QApplication.setWindowIcon(QIcon(str(icon_path)))
             else:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from src.utils import uuidutil
+from src.utils import uuid_util
 
 
 @dataclass
@@ -34,7 +34,7 @@ def _copy(conn: Connection) -> Connection:
 
 
 def _new_uuid() -> str:
-    return str(uuidutil.get_uuid())
+    return uuid_util.new_uuid()
 
 
 def _parse_methods(method) -> list[str]:

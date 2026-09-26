@@ -1,7 +1,7 @@
-# -- coding: utf-8 --
+# -*- coding: utf-8 -*-
 # @Time : 2024/03/31
 # @Author : Tiger
-# @File : pathutil.py
+# @File : file_utils.py
 # @Software: vscode
 """
 檔案存取類

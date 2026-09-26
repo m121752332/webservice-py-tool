@@ -1,18 +1,18 @@
-# -- coding: utf-8 --
+# -*- coding: utf-8 -*-
 # @Time : 2024/03/20
 # @Author : Tiger
-# @File : ConnectionManager.py
+# @File : web_service_config.py
 # @Software: vscode
 from pathlib import Path
 
-from src.utils import yaml_values, pathutil
+from src.utils import yaml_values, path_util
 
 
 class WebServiceConfig:
 
     def __init__(self):
         # 實際讀取的設定檔位置；設定頁也寫回同一個檔案
-        self.config_path = Path(pathutil.resource_abspath('app_data\\ws_tool.yaml'))
+        self.config_path = Path(path_util.resource_abspath('app_data\\ws_tool.yaml'))
         self.app_config = yaml_values.load_yaml_file(self.config_path)
 
         # APP 配置
@@ -31,33 +31,3 @@ class WebServiceConfig:
         # CONN 配置
         self.app_connection_path = self.app_config['app']['connection']['path']
         self.app_connection_profile = self.app_config['app']['connection']['profile']
-
-    def get_app_name(self):
-        return self.app_name
-
-    def get_app_version(self):
-        return self.app_version
-
-    def get_app_copyright(self):
-        return self.app_copyright
-
-    def get_app_timeout(self):
-        return self.app_timeout
-
-    def get_app_log_path(self):
-        return self.app_log_path
-
-    def get_app_log_level(self):
-        return self.app_log_level
-
-    def get_app_log_retention(self):
-        return self.app_log_retention
-
-    def get_app_img_path(self):
-        return self.app_img_path
-
-    def get_app_connection_path(self):
-        return self.app_connection_path
-
-    def get_app_connection_profile(self):
-        return self.app_connection_profile

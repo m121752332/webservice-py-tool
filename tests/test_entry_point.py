@@ -39,7 +39,7 @@ def test_resolve_app_dirs_uses_config_file_location_as_base(tmp_path, monkeypatc
     <root>/app_data，導致使用者放在 src/app_data 底下的 connections.profile 被忽略。
     """
     from src.config.web_service_config import WebServiceConfig
-    from src.utils import globalvalues
+    from src.utils import global_values
     from src.ws_tool import resolve_app_dirs
 
     app_data = tmp_path / "src" / "app_data"
@@ -63,7 +63,7 @@ def test_resolve_app_dirs_uses_config_file_location_as_base(tmp_path, monkeypatc
     (app_data / "connections.profile").write_text('{"connections": []}', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(globalvalues, "EXE_PATH", "")
+    monkeypatch.setattr(global_values, "EXE_PATH", "")
 
     config = WebServiceConfig()
     assert config.config_path == app_data / "ws_tool.yaml"

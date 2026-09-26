@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @Time : 2024/03/31
 # @Author : Tiger
-# @File : globalvalues.py
+# @File : global_values.py
 # @Software: vscode
 """
 全局变量

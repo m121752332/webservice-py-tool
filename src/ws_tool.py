@@ -22,7 +22,7 @@ from src.core.connection_store import ConnectionStore  # noqa: E402
 from src.core.soap_service import SoapService  # noqa: E402
 from src.ui.main_window import AboutInfo, MainWindow  # noqa: E402
 from src.ui.theme import ThemeManager  # noqa: E402
-from src.utils import pathutil  # noqa: E402
+from src.utils import path_util  # noqa: E402
 
 GITHUB_URL = "https://github.com/m121752332/webservice-py-tool"
 
@@ -51,16 +51,16 @@ def _install_excepthook() -> None:
 def resolve_app_dirs(config: WebServiceConfig) -> tuple[Path, Path]:
     """由設定檔（ws_tool.yaml）實際所在位置推導 log 目錄與連線資料目錄。
 
-    兩者共用同一個基準目錄，避免各自呼叫 pathutil.resource_abspath 在不同時機
+    兩者共用同一個基準目錄，避免各自呼叫 path_util.resource_abspath 在不同時機
     （例如 log 目錄尚未建立、連線資料目錄已存在）找到不一致的基準目錄，
     導致從 repo 根目錄啟動時讀到空的連線設定（見 F1）。
     """
-    config_path = Path(pathutil.resource_abspath(
-        os.path.join(config.get_app_connection_path(), "ws_tool.yaml")
+    config_path = Path(path_util.resource_abspath(
+        os.path.join(config.app_connection_path, "ws_tool.yaml")
     ))
     base = config_path.parent.parent
-    log_dir = base / config.get_app_log_path()
-    data_dir = base / config.get_app_connection_path()
+    log_dir = base / config.app_log_path
+    data_dir = base / config.app_connection_path
     return log_dir, data_dir
 
 
@@ -70,29 +70,29 @@ def main() -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     logger.add(
         os.path.join(log_dir, "run.log"),
-        retention=config.get_app_log_retention(),
-        level=str(config.get_app_log_level()).upper(),
+        retention=config.app_log_retention,
+        level=str(config.app_log_level).upper(),
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName(config.get_app_name())
-    app.setWindowIcon(QIcon(pathutil.resource_path(config.get_app_img_path())))
+    app.setApplicationName(config.app_name)
+    app.setWindowIcon(QIcon(path_util.resource_path(config.app_img_path)))
     _install_excepthook()
 
     settings = QSettings(os.path.join(data_dir, "settings.ini"), QSettings.Format.IniFormat)
     theme = ThemeManager(app, settings)
     theme.apply()
 
-    store = ConnectionStore(os.path.join(data_dir, config.get_app_connection_profile()))
+    store = ConnectionStore(os.path.join(data_dir, config.app_connection_profile))
     about = AboutInfo(
-        name=config.get_app_name(),
-        version=config.get_app_version(),
-        copyright=config.get_app_copyright(),
+        name=config.app_name,
+        version=config.app_version,
+        copyright=config.app_copyright,
         website=GITHUB_URL,
     )
     window = MainWindow(
         store, SoapService(), theme, about,
-        default_timeout=config.get_app_timeout(), settings_path=config.config_path,
+        default_timeout=config.app_timeout, settings_path=config.config_path,
     )
     window.show()
     return app.exec()
