@@ -35,6 +35,11 @@ if errorlevel 1 (
 echo.
 
 echo Collecting hidden imports for the settings editor plugin...
+if not exist "plugins\settings_editor\host_imports.txt" (
+    echo [ERROR] plugins\settings_editor\host_imports.txt not found. Run: uv run python plugins\settings_editor\gen_host_imports.py
+    pause
+    exit /b 1
+)
 set "HIDDEN="
 for /f "usebackq eol=# delims=" %%m in ("plugins\settings_editor\host_imports.txt") do set "HIDDEN=!HIDDEN! --hidden-import=%%m"
 
