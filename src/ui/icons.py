@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-側欄底部按鈕圖示：以 QPainter 繪製的漸層向量圖，不依賴外部圖檔
+介面圖示：以 QPainter 繪製的漸層向量圖（不依賴外部圖檔），以及資料夾染色、選單色塊
 """
-from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QImage, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
 
 ICON_CANVAS = 64  # 繪製座標系統的邏輯尺寸，實際輸出改用 ICON_SIZES 直接繪製對應解析度
 ICON_SIZES = (20, 40, 64)  # 對應按鈕實際顯示尺寸與常見 2x／3x 螢幕縮放；避免用單張大圖縮小造成邊緣模糊（淺色主題下尤其明顯）
@@ -13,6 +13,7 @@ CONSOLE_GRADIENT = ("#10B981", "#0D9488")
 RECORD_GRADIENT = ("#F59E0B", "#EA580C")
 PROJECT_GRADIENT = ("#818CF8", "#4F46E5")
 PALETTE_DOTS = ("#FACC15", "#34D399", "#38BDF8", "#F87171")
+SWATCH_SIZE = 12  # 右鍵選單色塊
 
 
 def _canvas(size: int) -> tuple[QPixmap, QPainter]:
@@ -132,3 +133,38 @@ def project_icon() -> QIcon:
         painter.drawRoundedRect(QRectF(4, 25, 56, 31), 8, 8)
 
     return _build_icon(draw)
+
+
+def tinted_icon(icon: QIcon, color: str) -> QIcon:
+    """保留原圖示的明暗層次與透明度，把色相換成 color（有顏色標記的資料夾用）
+
+    作法：轉灰階後以 Multiply 疊上指定色，再用原圖 alpha 裁切輪廓
+    """
+    sizes = icon.availableSizes() or [QSize(ICON_SIZES[0], ICON_SIZES[0])]
+    tinted = QIcon()
+    for size in sizes:
+        source = icon.pixmap(size).toImage().convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+        image = source.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(
+            QImage.Format.Format_ARGB32_Premultiplied
+        )
+        painter = QPainter(image)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+        painter.fillRect(image.rect(), QColor(color))
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        painter.drawImage(0, 0, source)
+        painter.end()
+        tinted.addPixmap(QPixmap.fromImage(image))
+    return tinted
+
+
+def swatch_icon(color: str) -> QIcon:
+    """右鍵選單「顏色」各項目前方的圓角方形色塊"""
+    pixmap = QPixmap(SWATCH_SIZE, SWATCH_SIZE)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    painter.drawRoundedRect(QRectF(0, 0, SWATCH_SIZE, SWATCH_SIZE), 3, 3)
+    painter.end()
+    return QIcon(pixmap)
