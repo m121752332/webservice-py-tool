@@ -24,6 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.connection_store import Connection, Folder
+from src.ui.icons import tinted_icon
+from src.ui.theme import LIGHT, ThemePalette, tag_color
 
 UNNAMED = "未命名"
 FOLDER_UNNAMED = "未命名目錄"
@@ -35,6 +37,7 @@ INDENTATION = 14
 ROOT_LABEL = "最外層"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
 _KIND_ROLE = Qt.ItemDataRole.UserRole + 1
+_COLOR_ROLE = Qt.ItemDataRole.UserRole + 2  # 顏色代號，None 為預設色
 
 FOLDER = "folder"
 CONNECTION = "connection"
@@ -141,6 +144,10 @@ class ConnectionItemWidget(QWidget):
         self.subtitle.setText(conn.url or NO_URL)
         self.setToolTip(conn.url)
 
+    def set_title_color(self, color: str | None) -> None:
+        """有顏色標記時名稱改用該色；None 回到全域 QSS 的一般文字色"""
+        self.title.setStyleSheet(f"color: {color};" if color else "")
+
 
 _DROP_POSITIONS = {
     QAbstractItemView.DropIndicatorPosition.AboveItem: ABOVE,
@@ -202,8 +209,9 @@ class ConnectionList(QWidget):
     connectionMoved = Signal(str, object, int)
     folderMoved = Signal(str, int)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, palette: ThemePalette = LIGHT):
         super().__init__(parent)
+        self._palette = palette
         self._folder_names: dict[str, str] = {}
         self._folder_expanded: dict[str, bool] = {}
 
@@ -310,7 +318,26 @@ class ConnectionList(QWidget):
         if item is None:
             return
         self.tree.itemWidget(item, 0).set_connection(conn)
+        self._set_color(item, conn.color)
         self._apply_filter(self.search_edit.text())
+
+    def set_item_color(self, uuid: str, color: str | None) -> None:
+        """更新單一目錄或連線的顏色標記（不重建整棵樹）"""
+        item = self._item_for(uuid)
+        if item is not None:
+            self._set_color(item, color)
+
+    def item_color(self, uuid: str) -> str | None:
+        item = self._item_for(uuid)
+        return item.data(0, _COLOR_ROLE) if item is not None else None
+
+    def set_palette(self, palette: ThemePalette) -> None:
+        """切換主題：依各項目的顏色代號改用新主題的色碼"""
+        self._palette = palette
+        blocked = self.tree.blockSignals(True)
+        for item in self._iter_items():
+            self._paint_color(item)
+        self.tree.blockSignals(blocked)
 
     def select(self, uuid: str) -> None:
         item = self._item_for(uuid)
@@ -376,13 +403,13 @@ class ConnectionList(QWidget):
         item.setData(0, _UUID_ROLE, folder.uuid)
         item.setData(0, _KIND_ROLE, FOLDER)
         item.setText(0, folder.name or FOLDER_UNNAMED)
-        item.setIcon(0, self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
         font = item.font(0)
         font.setWeight(QFont.Weight.DemiBold)
         font.setPointSizeF(FOLDER_FONT_SIZE)
         item.setFont(0, font)
         item.setSizeHint(0, QSize(0, FOLDER_ROW_HEIGHT))  # 固定高度，清單內改名的編輯框才放得下
+        self._set_color(item, folder.color)
         return item
 
     def _add_connection_item(self, parent: QTreeWidgetItem, conn: Connection) -> None:
@@ -394,6 +421,24 @@ class ConnectionList(QWidget):
         widget.ensurePolished()  # 先套用 QSS 字型，高度才會依較小的網址字型計算
         item.setSizeHint(0, QSize(0, widget.sizeHint().height()))
         self.tree.setItemWidget(item, 0, widget)
+        self._set_color(item, conn.color)
+
+    def _set_color(self, item: QTreeWidgetItem, color: str | None) -> None:
+        blocked = self.tree.blockSignals(True)  # 設定資料與圖示也會觸發 itemChanged，不是使用者改名
+        item.setData(0, _COLOR_ROLE, color)
+        self._paint_color(item)
+        self.tree.blockSignals(blocked)
+
+    def _paint_color(self, item: QTreeWidgetItem) -> None:
+        """目錄染資料夾圖示、連線改名稱顏色；未知代號視為預設色"""
+        color = tag_color(item.data(0, _COLOR_ROLE), self._palette)
+        if _kind_of(item) == FOLDER:
+            icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+            item.setIcon(0, tinted_icon(icon, color) if color else icon)
+            return
+        widget = self.tree.itemWidget(item, 0)
+        if widget is not None:
+            widget.set_title_color(color)
 
     # ---------- 查詢 ----------
 

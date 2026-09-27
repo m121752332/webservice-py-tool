@@ -2,13 +2,14 @@
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QAbstractItemView
+from PySide6.QtWidgets import QAbstractItemView, QStyle
 
 from src.core.connection_store import Connection, Folder
 from src.ui.connection_list import (
     ABOVE, BELOW, CONNECTION, FOLDER, FOLDER_FONT_SIZE, FOLDER_ROW_HEIGHT, FOLDER_UNNAMED, NO_URL, ON, UNNAMED, ConnectionList, Move,
     TreeLayout, resolve_drop,
 )
+from src.ui.theme import DARK, LIGHT
 
 CONNECTIONS = [
     Connection("u1", "正式區", "http://prod/ws?WSDL", []),
@@ -469,3 +470,76 @@ def test_clicking_shifted_area_selects_connection(qapp):
     QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
     assert widget.current_uuid() == "u5"
     widget.deleteLater()
+
+
+COLORED_FOLDERS = [Folder("f1", "TIPTOP", True, "blue"), Folder("f2", "", False)]
+COLORED_TREE = [
+    Connection("u1", "正式區", "http://prod/ws?WSDL", [], "f1", "red"),
+    Connection("u2", "測試區", "http://test/ws?WSDL", []),
+]
+
+
+def make_colored(palette=LIGHT):
+    widget = ConnectionList(palette=palette)
+    widget.set_tree(COLORED_FOLDERS, COLORED_TREE)
+    return widget
+
+
+def title_color(widget, uuid):
+    title = widget.item_widget(uuid).title
+    title.ensurePolished()
+    return title.palette().color(title.foregroundRole()).name().upper()
+
+
+def folder_icon(widget, uuid):
+    return folder_item(widget, uuid).icon(0).pixmap(18, 18).toImage()
+
+
+def plain_folder_icon(widget):
+    return widget.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon).pixmap(18, 18).toImage()
+
+
+def test_connection_title_uses_tag_color_only_on_name(qapp):
+    widget = make_colored()
+    assert title_color(widget, "u1") == "#C81E1E"
+    assert title_color(widget, "u2") != "#C81E1E"
+    assert widget.item_widget("u1").subtitle.styleSheet() == ""  # 網址不變色
+    assert widget.item_color("u1") == "red" and widget.item_color("u2") is None
+
+
+def test_folder_icon_is_tinted_and_restored(qapp):
+    widget = make_colored()
+    assert folder_icon(widget, "f1") != plain_folder_icon(widget)
+    assert folder_icon(widget, "f2") == plain_folder_icon(widget)
+    widget.set_item_color("f1", None)
+    assert folder_icon(widget, "f1") == plain_folder_icon(widget)
+
+
+def test_set_item_color_updates_single_item_without_signals(qapp):
+    widget = make_colored()
+    renamed = record(widget.folderRenamed)
+    widget.set_item_color("u2", "green")
+    widget.set_item_color("f2", "pink")
+    assert title_color(widget, "u2") == "#15703A"
+    assert widget.item_color("f2") == "pink"
+    assert renamed == []  # 設圖示／資料會觸發 itemChanged，不能被當成改名
+
+
+def test_unknown_color_key_shows_default(qapp):
+    widget = make_colored()
+    widget.set_item_color("u1", "magenta")
+    assert title_color(widget, "u1") == title_color(widget, "u2")
+
+
+def test_set_palette_recolors_items(qapp):
+    widget = make_colored()
+    light_icon = folder_icon(widget, "f1")
+    widget.set_palette(DARK)
+    assert title_color(widget, "u1") == "#FC8181"
+    assert folder_icon(widget, "f1") != light_icon
+
+
+def test_update_connection_applies_color(qapp):
+    widget = make_colored()
+    widget.update_connection(Connection("u2", "測試區", "http://test/ws?WSDL", [], None, "teal"))
+    assert title_color(widget, "u2") == "#0D6C65"
