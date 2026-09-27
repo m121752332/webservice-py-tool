@@ -105,7 +105,12 @@ class SettingsTree(QWidget):
 
     def _fix_widget_row_heights(self) -> None:
         """pyqtgraph 為求緊湊，會把值欄的高度縮到編輯元件自然高度的 90%（見 basetypes.WidgetParameterItem），
-        搭配本專案 QComboBox／SpinBox 的 QSS padding 常常放不下，元件會被裁切；改成至少留給元件自己要的高度"""
+        搭配本專案 QComboBox／SpinBox 的 QSS padding 常常放不下，元件會被裁切；改成至少留給元件自己要的高度。
+
+        光把列（欄位）本身的 sizeHint 調高還不夠：元件所在的 layoutWidget 用 QHBoxLayout 排版，
+        不會把元件垂直撐滿變高的列，元件會維持原本較矮的高度、上下留白，看起來像是被截掉一塊，
+        所以也要直接把元件本身的最小高度一併調高，撐滿列高
+        """
         for item in self.tree.listAllItems():
             widget = getattr(item, "widget", None)
             if widget is None:
@@ -113,8 +118,12 @@ class SettingsTree(QWidget):
             needed = self._natural_height(widget)
             target, column = (item.subItem, 0) if getattr(item, "asSubItem", False) else (item, 1)
             current = target.sizeHint(column)
-            if current.height() < needed:
-                target.setSizeHint(column, QSize(current.width(), needed))
+            # 列高最終可能由重設按鈕（defaultBtn）決定、比元件自己要的還高；
+            # 元件的最小高度要跟著最終列高走，兩者對不齊就會留一截空白
+            final_height = max(current.height(), needed)
+            if current.height() != final_height:
+                target.setSizeHint(column, QSize(current.width(), final_height))
+            widget.setMinimumHeight(final_height)
 
     @staticmethod
     def _natural_height(widget: QWidget) -> int:

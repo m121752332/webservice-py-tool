@@ -172,6 +172,21 @@ def test_widget_rows_are_tall_enough_for_their_editor(tree):
     assert checked > 0  # 確保這個測試真的檢查到東西，不是空跑
 
 
+def test_widget_itself_fills_its_row_not_just_the_wrapper(tree):
+    """只調高值欄（wrapper）的 sizeHint 不夠：wrapper 內是 QHBoxLayout，不會把元件垂直撐滿，
+    元件會維持原本較矮的高度、上下留白，看起來像被截掉一塊；元件自己的最小高度也要一併調高"""
+    checked = 0
+    for item in tree.tree.listAllItems():
+        widget = getattr(item, "widget", None)
+        if widget is None:
+            continue
+        column = 0 if getattr(item, "asSubItem", False) else 1
+        target = item.subItem if getattr(item, "asSubItem", False) else item
+        assert widget.minimumHeight() >= target.sizeHint(column).height(), item.text(0)
+        checked += 1
+    assert checked > 0
+
+
 def test_numeric_spinbox_disables_compact_height_and_is_tall_enough(tree):
     """pyqtgraph 的 SpinBox 有個 compactHeight 選項（預設開啟），每次繪製都會把自己壓到
     剛好文字高度、無視本專案 QSS 的留白，且 sizeHint() 固定回傳高度 0，兩個問題疊加，
