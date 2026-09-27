@@ -42,9 +42,10 @@ def main() -> int:
         [
             sys.executable, "-m", "PyInstaller",
             "--clean", "--noconfirm", "--log-level=WARN",
-            "--icon=assets/app_icon.ico",
-            "--add-data", "assets;assets",
-            "--version-file", "src/config/file_version_info.txt",
+            f"--icon={ROOT / 'assets' / 'app_icon.ico'}",
+            "--add-data", f"{ROOT / 'assets'};assets",
+            "--version-file", str(ROOT / "src" / "config" / "file_version_info.txt"),
+            "--specpath", str(BUILD_DIR),
             "-F", "-w", "-n", "WebService-Tool",
             *_hidden_imports(),
             "src/ws_tool.py",
