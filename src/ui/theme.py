@@ -128,6 +128,36 @@ DARK = ThemePalette(
     level_alphas=(0.10, 0.20, 0.35, 0.55),
 )
 
+
+@dataclass(frozen=True)
+class TagColor:
+    key: str  # 存進 connections.profile 的代號
+    label: str  # 右鍵選單顯示名稱
+    light: str  # 淺色主題色碼
+    dark: str  # 深色主題色碼
+
+
+# 專案目錄／連線的顏色標記：淺色主題取深色階、深色主題取亮色階，
+# 對清單底色 bg 與選取列底色 surface_hover 的對比度皆 ≥ 4.5（見 test_theme）
+TAG_COLORS = (
+    TagColor("red", "紅", "#C81E1E", "#FC8181"),
+    TagColor("orange", "橘", "#B23C0A", "#FB923C"),
+    TagColor("yellow", "黃", "#8A5A00", "#FACC15"),  # 淺色主題的亮黃在白底看不清，壓成芥末黃
+    TagColor("green", "綠", "#15703A", "#4ADE80"),
+    TagColor("teal", "青", "#0D6C65", "#2DD4BF"),
+    TagColor("blue", "藍", "#1D4ED8", "#6AADFB"),
+    TagColor("purple", "紫", "#7E22CE", "#C99CFD"),
+    TagColor("pink", "粉紅", "#BE185D", "#F689C2"),
+)
+
+
+def tag_color(key: str | None, palette: ThemePalette) -> str | None:
+    """顏色代號轉成目前主題的色碼；None 或未知代號回傳 None（使用預設色）"""
+    for color in TAG_COLORS:
+        if color.key == key:
+            return color.dark if palette.name == DARK.name else color.light
+    return None
+
 _QSS = Template("""
 QWidget { color: $text; }
 QMainWindow, QDialog { background: $bg; }

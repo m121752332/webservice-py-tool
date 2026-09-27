@@ -5,7 +5,8 @@ from PySide6.QtGui import QImage, QPalette
 
 from src.core.log_buffer import LEVELS
 from src.ui.theme import (
-    DARK, LIGHT, ThemeManager, ThemeMode, build_qpalette, build_stylesheet, write_arrow_images,
+    DARK, LIGHT, TAG_COLORS, ThemeManager, ThemeMode, build_qpalette, build_stylesheet, tag_color,
+    write_arrow_images,
 )
 
 
@@ -199,3 +200,25 @@ def test_about_to_change_not_emitted_when_palette_unchanged(qapp, settings):
     manager.themeAboutToChange.connect(lambda old, new: seen.append(new))
     manager.apply()
     assert seen == []
+
+
+def test_tag_colors_are_eight_unique_keys():
+    assert [color.key for color in TAG_COLORS] == [
+        "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink",
+    ]
+    assert [color.label for color in TAG_COLORS] == ["紅", "橘", "黃", "綠", "青", "藍", "紫", "粉紅"]
+
+
+@pytest.mark.parametrize("palette", [LIGHT, DARK])
+def test_tag_colors_meet_contrast_on_list_and_selection(palette):
+    for color in TAG_COLORS:
+        value = tag_color(color.key, palette)
+        assert _contrast(value, palette.bg) >= 4.5, color.key
+        assert _contrast(value, palette.surface_hover) >= 4.5, color.key  # 選取列底色
+
+
+def test_tag_color_picks_theme_variant_and_ignores_unknown():
+    assert tag_color("red", LIGHT) == "#C81E1E"
+    assert tag_color("red", DARK) == "#FC8181"
+    assert tag_color(None, LIGHT) is None
+    assert tag_color("magenta", DARK) is None
