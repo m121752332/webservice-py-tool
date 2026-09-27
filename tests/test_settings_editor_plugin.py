@@ -161,12 +161,28 @@ def test_programmatic_change_and_load_do_not_emit_editing(tree, doc):
 
 def test_widget_rows_are_tall_enough_for_their_editor(tree):
     """pyqtgraph 預設把值欄縮到編輯元件自然高度的 90%，搭配本專案的 QSS padding
-    常常放不下（尤其 QComboBox、SpinBox），元件會被裁切；值欄高度至少要跟得上"""
+    常常放不下（尤其 QComboBox），元件會被裁切；值欄高度至少要跟得上"""
     checked = 0
     for item in tree.tree.listAllItems():
         widget = getattr(item, "widget", None)
-        if widget is None:
-            continue
+        if widget is None or hasattr(widget, "opts"):
+            continue  # pyqtgraph 的 SpinBox 另外處理，見下一個測試（sizeHint() 固定回傳高度 0，不能拿來比較）
         assert item.sizeHint(1).height() >= widget.sizeHint().height(), item.text(0)
         checked += 1
     assert checked > 0  # 確保這個測試真的檢查到東西，不是空跑
+
+
+def test_numeric_spinbox_disables_compact_height_and_is_tall_enough(tree):
+    """pyqtgraph 的 SpinBox 有個 compactHeight 選項（預設開啟），每次繪製都會把自己壓到
+    剛好文字高度、無視本專案 QSS 的留白，且 sizeHint() 固定回傳高度 0，兩個問題疊加，
+    數字欄位會遠比其他欄位矮很多、看起來被裁掉一截"""
+    checked = 0
+    for item in tree.tree.listAllItems():
+        widget = getattr(item, "widget", None)
+        if widget is None or not hasattr(widget, "opts"):
+            continue
+        assert widget.opts["compactHeight"] is False
+        assert widget.minimumHeight() == widget.maximumHeight() > widget.fontMetrics().height()
+        assert item.sizeHint(1).height() >= widget.minimumHeight()
+        checked += 1
+    assert checked > 0

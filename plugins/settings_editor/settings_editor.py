@@ -10,6 +10,7 @@ from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import QAbstractSpinBox, QLineEdit, QVBoxLayout, QWidget
 
 API_VERSION = 1
+_SPINBOX_PADDING = 14  # 數值欄位固定高度：字型高度 + 上下留白，貼近其他欄位（QLineEdit 等）的實際高度
 
 _TREE_QSS = """
 QTreeWidget#SettingsTree {{
@@ -109,11 +110,26 @@ class SettingsTree(QWidget):
             widget = getattr(item, "widget", None)
             if widget is None:
                 continue
+            needed = self._natural_height(widget)
             target, column = (item.subItem, 0) if getattr(item, "asSubItem", False) else (item, 1)
             current = target.sizeHint(column)
-            needed = widget.sizeHint().height()
             if current.height() < needed:
                 target.setSizeHint(column, QSize(current.width(), needed))
+
+    @staticmethod
+    def _natural_height(widget: QWidget) -> int:
+        """數值欄位用的是 pyqtgraph 自己的 SpinBox，不是一般 QAbstractSpinBox：
+
+        它的 sizeHint() 固定回傳高度 0（見 pyqtgraph.widgets.SpinBox），且預設開啟
+        compactHeight，每次繪製都會把自己壓回「剛好文字高度」、無視 QSS 留白——上面用
+        sizeHint() 決定列高的做法對它完全沒用，必須先關掉 compactHeight、直接把高度定死
+        """
+        if hasattr(widget, "opts") and "compactHeight" in widget.opts:
+            widget.setOpts(compactHeight=False)
+            height = widget.fontMetrics().height() + _SPINBOX_PADDING
+            widget.setFixedHeight(height)
+            return height
+        return widget.sizeHint().height()
 
     def _pending_editors(self):
         """(參數項目, 編輯元件)：只有文字與數值欄位會延遲提交"""
