@@ -63,11 +63,11 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 按 **F10** 或側欄的紀錄按鈕開啟「請求紀錄」視窗，可依日期、連線、方法與關鍵字查詢，並把某一筆帶回工作區重新執行。
 
 ## 版本產生
-在專案根目錄執行（務必用 `uv run python`，不要直接用 `python`，否則抓不到虛擬環境裡的 PyInstaller）：
+`uv run build` 打包時會自動執行，不需要手動處理：清空 `build` 目錄後，借用系統內建的 `C:\Windows\System32\WWAHost.exe` 當範本（純粹取用它的 VERSIONINFO 資源結構，跟本 App 版本內容無關），產生 `build/file_version_info.txt` 供 PyInstaller 的 `--version-file` 使用。`build` 目錄不進版控，每次打包都會重新產生一次。
+
+若想手動產生（例如想確認內容、或用別的來源 exe 當範本），在專案根目錄執行（務必用 `uv run python`，不要直接用 `python`，否則抓不到虛擬環境裡的 PyInstaller）：
 
 `uv run python src/config/grab_version.py C:\Windows\System32\WWAHost.exe build/file_version_info.txt`
-
-產生的 `build/file_version_info.txt` 用於包裝到 PyInstaller 的版本檔案；`uv run build` 會自動讀取這個檔案（清空 `build` 目錄前會先暫存、清空後再寫回，不需要每次打包前重新產生一次）。`build` 目錄不進版控，第一次執行請先確保它存在（`mkdir build`），或直接跑過一次 `uv run build` 讓它自動建立。
 
 ## 內置功能
 

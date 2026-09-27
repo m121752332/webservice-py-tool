@@ -14,10 +14,27 @@ PLUGIN_BUILD_SCRIPT = ROOT / "plugins" / "settings_editor" / "build_plugin.py"
 WS_TOOL_YAML_SRC = ROOT / "src" / "app_data" / "ws_tool.yaml"
 WS_TOOL_YAML_DEST = DIST_DIR / "app_data" / "ws_tool.yaml"
 VERSION_FILE = BUILD_DIR / "file_version_info.txt"
+GRAB_VERSION_SCRIPT = ROOT / "src" / "config" / "grab_version.py"
+# 純粹借這個系統內建 exe 的 VERSIONINFO 資源結構當範本，跟本 App 的版本內容無關；
+# Windows 10/11 都內建，不需要額外準備檔案
+VERSION_TEMPLATE_EXE = r"C:\Windows\System32\WWAHost.exe"
 
 
 def _kill_running_exe() -> None:
     subprocess.run(["taskkill", "/f", "/im", EXE_NAME], capture_output=True)
+
+
+def _generate_version_info(template_exe: str, out_file: Path) -> bool:
+    """執行 grab_version.py，把 template_exe 的版本資源寫成 PyInstaller 用的 out_file"""
+    print(f"產生版本資訊 {out_file}...")
+    result = subprocess.run(
+        [sys.executable, str(GRAB_VERSION_SCRIPT), template_exe, str(out_file)],
+        cwd=ROOT, capture_output=True,
+    )
+    if result.returncode != 0:
+        # Windows API 的錯誤訊息會用系統的 locale 編碼（例如 cp950），不是固定 UTF-8，嚴格解碼會炸掉
+        print((result.stderr or result.stdout).decode(errors="replace"))
+    return result.returncode == 0
 
 
 def _hidden_imports() -> list[str]:
@@ -30,22 +47,13 @@ def _hidden_imports() -> list[str]:
 def main() -> int:
     _kill_running_exe()
 
-    # file_version_info.txt 放在 build/ 底下（不進版控），但下面會整個清空 build 目錄，
-    # 所以先讀進記憶體，清空後再寫回去，避免每次建置前都要重新執行 grab_version.py
-    old_version_info = VERSION_FILE.read_bytes() if VERSION_FILE.exists() else None
-
     if BUILD_DIR.exists():
         print("移除舊的 build 目錄...")
         shutil.rmtree(BUILD_DIR)
+    BUILD_DIR.mkdir(parents=True)
 
-    if old_version_info is not None:
-        BUILD_DIR.mkdir(parents=True, exist_ok=True)
-        VERSION_FILE.write_bytes(old_version_info)
-    else:
-        print(
-            f"[ERROR] {VERSION_FILE} 不存在，請先執行 "
-            f"uv run python src/config/grab_version.py <來源 exe 路徑> {VERSION_FILE}"
-        )
+    if not _generate_version_info(VERSION_TEMPLATE_EXE, VERSION_FILE):
+        print(f"[ERROR] 版本資訊產生失敗，請確認 {VERSION_TEMPLATE_EXE} 存在。")
         return 1
 
     if not HOST_IMPORTS.exists():
