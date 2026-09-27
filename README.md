@@ -18,7 +18,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 5. UI 檢測工具（類似瀏覽器的「檢查元素」）：`$ uv run python -m PyQtInspect --direct --file src/ws_tool.py`
 6. 打包 exe：`$ uv run build`，完成後會在 `dist` 目錄產生 `WebService-Tool.exe`；會自動把 `src/app_data/ws_tool.yaml` 複製到 `dist/app_data/ws_tool.yaml`（每次 build 都會覆蓋，確保與 repo 一致）。`connections.profile` 不會自動產生或複製，程式首次啟動時會自動建立空白的一份；若要沿用既有連線資料，散布時自行把 `connections.profile` 放進同一個 `dist/app_data/` 目錄
    `uv run build` 會一併產生 `dist/plugins/settings_editor/`（設定編輯器外掛，含 pyqtgraph、numpy）；散布時放在 exe 同層即可使用 F11 設定頁，不附上則 F11 顯示「未安裝」。升級 pyqtgraph／numpy 時同步修改 `pyproject.toml` 的 dev 群組與 `plugins/settings_editor/build_plugin.py` 的版本，並執行 `uv run python plugins/settings_editor/gen_host_imports.py` 重新產生 `host_imports.txt`
-7. 封裝發行版本：`$ uv run package`（先執行 build，再依 `ws_tool.yaml` 的 `app.version` 把 `dist` 壓縮成 `WebService-Tool-vX.Y.Z.zip`）
+7. 封裝發行版本：`$ uv run package`（先執行 build，再依 `ws_tool.yaml` 的 `app.version` 把 `dist` 壓縮成 `bin/WebService-Tool-vX.Y.Z.zip`）
 8. 清除打包產物：`$ uv run clean`（清空 `dist` 目錄底下所有檔案，保留目錄本身）；`$ uv run clean-package`（先 clean 再完整跑一次 build + package）
 9. 暫時不支持mac環境打包，如果有想法也可以自己去找到合適的配套方案
 
@@ -31,7 +31,7 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
 | `uv run test` | `tasks/test.py` | 轉呼叫 `pytest`；額外參數原樣傳入，並產生 `reports/test-report.html` 測試報告 |
 | `uv run lint` | `tasks/lint.py` | 對 `src`、`tests`、`plugins` 執行 `ruff check` |
 | `uv run build` | `tasks/build.py` | 用 PyInstaller 建置 `WebService-Tool.exe`，一併建置設定編輯器外掛並複製 `ws_tool.yaml` 到 `dist` |
-| `uv run package` | `tasks/package.py` | 先執行 `build`，再依 `app.version` 把 `dist` 壓縮成發行用的 zip |
+| `uv run package` | `tasks/package.py` | 先執行 `build`，再依 `app.version` 把 `dist` 壓縮成發行用的 zip，放到 `bin` 目錄 |
 | `uv run clean` | `tasks/clean.py` | 清空 `dist` 目錄底下的檔案（執行前會先關閉正在跑的 exe） |
 | `uv run clean-package` | `tasks/clean_package.py` | 先 `clean` 再完整跑一次 `build` + `package` |
 

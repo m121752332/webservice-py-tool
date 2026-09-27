@@ -9,6 +9,7 @@ from tasks import build as build_task
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST_DIR = ROOT / "dist"
+BIN_DIR = ROOT / "bin"
 WS_TOOL_YAML = ROOT / "src" / "app_data" / "ws_tool.yaml"
 
 
@@ -18,7 +19,7 @@ def _app_version() -> str:
 
 
 def _archive_path() -> Path:
-    return ROOT / f"WebService-Tool-{_app_version()}.zip"
+    return BIN_DIR / f"WebService-Tool-{_app_version()}.zip"
 
 
 def main() -> int:
@@ -27,6 +28,7 @@ def main() -> int:
         return exit_code
 
     archive_path = _archive_path()
+    BIN_DIR.mkdir(parents=True, exist_ok=True)
     if archive_path.exists():
         archive_path.unlink()
 
