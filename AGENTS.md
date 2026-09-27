@@ -24,7 +24,7 @@ WebService 測試工具，PySide6 桌面 App，取代 wxPython 舊版。純 Wind
 
 ## 程式風格
 
-- 全部原始碼採用 UTF-8，檔案開頭一律 `# -*- coding: utf-8 -*-`
+- 所有 Python 原始碼與專案文字檔統一使用 UTF-8 編碼。Python 3 原始碼不需要額外加入 # -*- coding: utf-8 -*- 編碼宣告，除非有特殊相容性需求。
 - **註解、docstring、UI 文字、commit 訊息一律使用繁體中文**；程式識別字（變數、函式、類別名稱）用英文
 - 模組頂端用一段簡短 docstring 說明檔案職責（例：`"""主視窗：左側連線清單 + 右側工作區"""`）
 - 核心邏輯（`src/core`）與 UI 分離：不要讓 `connection_store.py`、`soap_service.py` 依賴 PySide6
