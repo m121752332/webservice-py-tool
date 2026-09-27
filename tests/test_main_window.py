@@ -19,6 +19,7 @@ from src.core.xml_log import CallRecord
 from src.ui import main_window as main_window_module
 from src.ui.log_console import ConsoleSettings
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
+from src.ui.splitter import SashHandle
 from src.ui.theme import DARK, LIGHT, ThemeManager, ThemeMode
 from src.ui.theme_transition import CircularReveal, reveal_origin
 from tests.helpers import wait_until, write_settings
@@ -275,6 +276,16 @@ def test_theme_change_recolors_editors_and_menu(env):
     assert window.request_editor.colors == DARK.xml
     assert window.response_editor.colors == DARK.xml
     assert window.theme_actions[ThemeMode.DARK].isChecked()
+
+
+def test_splitters_use_sash_and_follow_theme(env):
+    window = env.make()
+    # 專案目錄／工作區、請求／回應左右分割，工作區／主控台上下分割
+    splitters = (window.main_splitter, window.editor_splitter, window.right_splitter)
+    assert all(isinstance(splitter.handle(1), SashHandle) for splitter in splitters)
+    env.theme.set_mode(ThemeMode.DARK)
+    assert all(splitter.palette_colors == (DARK.text_muted, DARK.accent, DARK.border) for splitter in splitters)
+    assert window.main_splitter.divider  # 專案目錄與工作區之間的分隔線由分隔器繪製
 
 
 def test_theme_switch_plays_circular_reveal(env):
@@ -677,7 +688,7 @@ def test_apply_app_settings_updates_window(env, app_calls, tmp_path):
     window = env.make()
     window.apply_app_settings(AppSettings("新名稱", "v9.9.9", "新版權", str(icon_path), 60))
     assert window.windowTitle() == "新名稱"
-    assert window.app_title.text() == "新名稱"
+    assert window.sidebar_title.text() == "專案目錄"  # 側欄標題固定，不跟 APP 名稱
     assert window._about == AboutInfo("新名稱", "v9.9.9", "新版權", ABOUT.website)
     assert app_calls.names == ["新名稱"]
     assert len(app_calls.icons) == 1
@@ -793,7 +804,6 @@ def test_save_button_hot_reloads_and_stays(env, app_calls):
     page.editor.parameters().child("app", "name").setValue("新名稱")
     page.save_button.click()
     assert window.windowTitle() == "新名稱"
-    assert window.app_title.text() == "新名稱"
     assert window.stack.currentWidget() is page
 
 
@@ -956,7 +966,8 @@ def rail_buttons(window):
 def test_rail_order_and_console_panel_hidden_by_default(env):
     window = env.make()
     assert rail_buttons(window) == [
-        window.rail_toggle_button, window.console_button, window.theme_button, window.about_button,
+        window.rail_toggle_button, window.project_button, window.console_button, window.theme_button,
+        window.about_button,
     ]
     assert window.console_button.text() == "主控台"
     assert window.console_panel.isHidden()
@@ -981,7 +992,7 @@ def test_rail_collapse_toggle_hides_labels_and_persists(env):
     window.rail_toggle_button.click()
 
     assert window.rail.width() == 48
-    for button in (window.theme_button, window.about_button, window.console_button):
+    for button in (window.theme_button, window.about_button, window.console_button, window.project_button):
         assert button.text() == ""
     assert str(env.qsettings.value("rail/collapsed")).lower() == "true"
 
@@ -1002,6 +1013,68 @@ def test_rail_toggle_shortcut(env):
     press_shortcut(window, "Alt+Q")
     assert window.rail.width() == 108
 
+
+
+def show_window(window):
+    window.show()
+    wait_until(lambda: window.main_splitter.sizes()[0] > 0)
+
+
+def test_sidebar_title_and_project_button(env):
+    window = env.make()
+    assert window.sidebar_title.text() == "專案目錄"
+    assert window.project_button.text() == "專案"
+    assert window.project_button.toolTip() == "專案目錄 (Alt+1)"
+    assert window.project_button.isChecked()
+    assert not window.sidebar.isHidden()
+
+
+def test_project_button_and_shortcut_toggle_sidebar_and_persist(env):
+    window = env.make()
+    window.project_button.click()
+    assert window.sidebar.isHidden()
+    assert not window.project_button.isChecked()
+    assert str(env.qsettings.value("sidebar/visible")).lower() == "false"
+    assert env.make().sidebar.isHidden()  # 重開後維持隱藏
+
+    press_shortcut(window, "Alt+1")
+    assert not window.sidebar.isHidden()
+    assert window.project_button.isChecked()
+    assert str(env.qsettings.value("sidebar/visible")).lower() == "true"
+
+
+def test_sidebar_width_is_draggable_and_restored(env):
+    window = env.make()
+    show_window(window)
+    assert window.main_splitter.sizes()[0] == 292  # 預設寬度
+    window.main_splitter.moveSplitter(360, 1)
+    assert window.main_splitter.sizes()[0] == 360
+    window.project_button.click()
+    window.project_button.click()
+    assert window.main_splitter.sizes()[0] == 360
+    assert int(env.qsettings.value("sidebar/width")) == 360
+
+    window2 = env.make()
+    show_window(window2)
+    assert window2.main_splitter.sizes()[0] == 360
+
+
+def test_dragging_sidebar_to_about_1cm_hides_it(env):
+    window = env.make()
+    show_window(window)
+    threshold = window.sidebar_collapse_width()
+    assert 30 <= threshold <= 60  # 約 1 cm，依螢幕 DPI 換算
+    window.main_splitter.sashPressed.emit(1)  # 開始拖曳時的寬度 292
+    window.main_splitter.moveSplitter(200, 1)
+    assert not window.sidebar.isHidden()
+    window.main_splitter.moveSplitter(threshold + 1, 1)
+    assert not window.sidebar.isHidden()
+    window.main_splitter.moveSplitter(0, 1)  # 最多只能拉到最小寬度（約 1 cm），到了就收起
+    assert window.sidebar.isHidden()
+    assert not window.project_button.isChecked()
+
+    window.project_button.click()
+    assert window.main_splitter.sizes()[0] == 292  # 還原成拖曳前的寬度，而不是拖到一半的寬度
 
 def test_console_toggles_via_button_shortcut_and_close(env):
     window = env.make()
@@ -1106,7 +1179,7 @@ def test_record_button_hidden_without_log_dir(env):
 def test_record_button_and_f10_open_viewer(env, tmp_path):
     window = env.make(xml_log_dir=tmp_path)
     assert rail_buttons(window) == [
-        window.rail_toggle_button, window.console_button, window.record_button,
+        window.rail_toggle_button, window.project_button, window.console_button, window.record_button,
         window.theme_button, window.about_button,
     ]
     assert window.record_button.text() == "查紀錄" and "F10" in window.record_button.toolTip()

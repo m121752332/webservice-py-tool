@@ -11,6 +11,7 @@ THEME_GRADIENT = ("#8B5CF6", "#EC4899")
 ABOUT_GRADIENT = ("#0EA5E9", "#2563EB")
 CONSOLE_GRADIENT = ("#10B981", "#0D9488")
 RECORD_GRADIENT = ("#F59E0B", "#EA580C")
+PROJECT_GRADIENT = ("#818CF8", "#4F46E5")
 PALETTE_DOTS = ("#FACC15", "#34D399", "#38BDF8", "#F87171")
 
 
@@ -115,5 +116,19 @@ def record_icon() -> QIcon:
         painter.setPen(pen)
         for y, end in ((18, 44), (30, 44), (42, 34)):
             painter.drawLine(QPointF(20, y), QPointF(end, y))
+
+    return _build_icon(draw)
+
+
+def project_icon() -> QIcon:
+    """專案目錄：漸層資料夾（後片含頁籤）與半透明白色前片"""
+    def draw(painter: QPainter) -> None:
+        back = QPainterPath()
+        back.addRoundedRect(QRectF(4, 10, 26, 14), 5, 5)
+        back.addRoundedRect(QRectF(4, 16, 56, 40), 8, 8)
+        painter.setBrush(_gradient(PROJECT_GRADIENT))
+        painter.drawPath(back.simplified())
+        painter.setBrush(QColor(255, 255, 255, 70))
+        painter.drawRoundedRect(QRectF(4, 25, 56, 31), 8, 8)
 
     return _build_icon(draw)

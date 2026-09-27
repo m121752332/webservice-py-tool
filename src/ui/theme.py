@@ -131,9 +131,9 @@ DARK = ThemePalette(
 _QSS = Template("""
 QWidget { color: $text; }
 QMainWindow, QDialog { background: $bg; }
-QFrame#Sidebar { background: $bg; border-right: 1px solid $border; }
+QFrame#Sidebar { background: $bg; }  /* 右側分隔線由 main_splitter 的分隔器繪製 */
 QFrame#Rail { background: $bg; border-right: 1px solid $border; }
-QLabel#AppTitle { font-size: 13pt; font-weight: 600; padding: 0 4px 4px 4px; }
+QLabel#SidebarTitle { font-size: 13pt; font-weight: 600; padding: 0 4px 4px 4px; }
 QLabel#PageTitle { font-size: 13pt; font-weight: 600; }
 QLabel#Placeholder { color: $text_muted; font-size: 11pt; }
 QLabel#SectionTitle { font-weight: 600; }

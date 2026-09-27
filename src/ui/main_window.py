@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QSplitter,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -38,11 +37,12 @@ from src.core.soap_service import CallResult, ParamCountMismatch, describe_error
 from src.core.xml_log import CallRecord
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
-from src.ui.icons import about_icon, console_icon, rail_toggle_icon, record_icon, theme_icon
+from src.ui.icons import about_icon, console_icon, project_icon, rail_toggle_icon, record_icon, theme_icon
 from src.ui.log_console import ConsolePanel, ConsoleSettings
 from src.ui.notification_bar import NotificationBar
 from src.ui.plugin_loader import load_settings_plugin
 from src.ui.settings_page import SettingsPage
+from src.ui.splitter import SashSplitter
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
 from src.ui.theme_transition import CircularReveal, reveal_origin
 from src.ui.workers import run_in_background
@@ -57,7 +57,11 @@ RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
 WAIT_TICK_MS = 1000  # 等待中狀態列的秒數更新間隔
 NEW_FOLDER_NAME = "新目錄"
-SIDEBAR_WIDTH = 292
+SIDEBAR_WIDTH = 292  # 專案目錄預設寬度
+SIDEBAR_COLLAPSE_CM = 1.0  # 專案目錄拖到剩這個寬度就自動收起
+SIDEBAR_VISIBLE_KEY = "sidebar/visible"
+SIDEBAR_WIDTH_KEY = "sidebar/width"
+SIDEBAR_TITLE = "專案目錄"
 RAIL_WIDTH_EXPANDED = 108  # 展開時：圖示 + 文字
 RAIL_WIDTH_COLLAPSED = 48  # 摺疊時：僅圖示
 RAIL_ICON_SIZE = 20
@@ -65,6 +69,7 @@ RAIL_SPACING = 6
 RAIL_MARGIN = 8
 RAIL_COLLAPSED_KEY = "rail/collapsed"
 CONSOLE_SHORTCUT = "Alt+C"
+PROJECT_SHORTCUT = "Alt+1"
 RECORD_SHORTCUT = "F10"
 RAIL_SHORTCUT = "Alt+Q"
 CONSOLE_MIN_HEIGHT = 120
@@ -129,6 +134,8 @@ class MainWindow(QMainWindow):
         self._settings = settings
         self._reveal_from: tuple[QPixmap, ThemePalette] | None = None  # 主題切換前的畫面與新 palette
         self._rail_collapsed = self._read_rail_collapsed()
+        self._sidebar_width = self._read_sidebar_width()
+        self._sidebar_drag_start: int | None = None  # 開始拖曳專案目錄分隔器時的寬度
 
         self.setWindowTitle(about.name)
         self.resize(1100, 700)
@@ -141,6 +148,7 @@ class MainWindow(QMainWindow):
         self._reset_status()
         self._load_initial_connections()
         self.set_console_visible(self._console_settings.visible())
+        self.set_sidebar_visible(self._read_sidebar_visible())
 
     # ---------- 版面 ----------
 
@@ -158,16 +166,24 @@ class MainWindow(QMainWindow):
         self.settings_page: SettingsPage | None = None  # 首次按 F11 才載入外掛並建立
         self.console_panel = ConsolePanel(self._log_buffer, self._theme.palette, self._console_settings.levels())
         self.console_panel.setMinimumHeight(CONSOLE_MIN_HEIGHT)
-        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.right_splitter = SashSplitter(Qt.Orientation.Vertical, self._theme.palette)
         self.right_splitter.setChildrenCollapsible(False)
+        self.right_splitter.setHandleWidth(8)  # 預設 4px 放不下三個點與 4px 的線
         self.right_splitter.addWidget(self.stack)
         self.right_splitter.addWidget(self.console_panel)
         self.right_splitter.setStretchFactor(0, 1)  # 視窗放大時多出的空間給上方，面板維持高度
         self.right_splitter.setStretchFactor(1, 0)
         self.console_panel.hide()
+        # 分隔線由分隔器畫在正中央（取代側欄右邊框），三個點才會疊在線上
+        self.main_splitter = SashSplitter(Qt.Orientation.Horizontal, self._theme.palette, divider=True)
+        self.main_splitter.setChildrenCollapsible(False)  # 收起改由 _on_main_splitter_moved 處理，才能記住原寬度
+        self.main_splitter.setHandleWidth(8)
+        self.main_splitter.addWidget(self.sidebar)
+        self.main_splitter.addWidget(self.right_splitter)
+        self.main_splitter.setStretchFactor(0, 0)  # 視窗放大時多出的空間給工作區，專案目錄維持寬度
+        self.main_splitter.setStretchFactor(1, 1)
         root.addWidget(self.rail)
-        root.addWidget(self.sidebar)
-        root.addWidget(self.right_splitter, 1)
+        root.addWidget(self.main_splitter, 1)
         self.setCentralWidget(central)
 
         self.status_state = QLabel()
@@ -180,17 +196,16 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
-        sidebar.setFixedWidth(SIDEBAR_WIDTH)
+        sidebar.setMinimumWidth(self.sidebar_collapse_width())  # 拖到最小寬度即收起
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(12, 16, 12, 12)
         layout.setSpacing(8)
 
-        self.app_title = QLabel(self._about.name)
-        self.app_title.setObjectName("AppTitle")
-        self.app_title.setWordWrap(True)
+        self.sidebar_title = QLabel(SIDEBAR_TITLE)
+        self.sidebar_title.setObjectName("SidebarTitle")
         self.connection_list = ConnectionList()
 
-        layout.addWidget(self.app_title)
+        layout.addWidget(self.sidebar_title)
         layout.addWidget(self.connection_list, 1)
         return sidebar
 
@@ -210,14 +225,20 @@ class MainWindow(QMainWindow):
         self.theme_button = styled_button("主題", "footer", "切換淺色 / 深色主題")
         self.theme_button.setMenu(self._build_theme_menu())
         self.about_button = styled_button("關於", "footer")
+        self.project_button = styled_button("專案", "footer", f"{SIDEBAR_TITLE} ({PROJECT_SHORTCUT})")
+        self.project_button.setCheckable(True)
         self.console_button = styled_button("主控台", "footer", f"開關主控台 ({CONSOLE_SHORTCUT})")
         self.console_button.setCheckable(True)
-        self._rail_labels = {self.theme_button: "主題", self.about_button: "關於", self.console_button: "主控台"}
+        self._rail_labels = {
+            self.project_button: "專案", self.theme_button: "主題", self.about_button: "關於", self.console_button: "主控台",
+        }
         for button, icon in (
-            (self.console_button, console_icon()), (self.theme_button, theme_icon()), (self.about_button, about_icon()),
+            (self.project_button, project_icon()), (self.console_button, console_icon()),
+            (self.theme_button, theme_icon()), (self.about_button, about_icon()),
         ):
             button.setIcon(icon)
             button.setIconSize(QSize(RAIL_ICON_SIZE, RAIL_ICON_SIZE))
+        layout.addWidget(self.project_button)
         layout.addWidget(self.console_button)
 
         self.record_button = None
@@ -289,13 +310,14 @@ class MainWindow(QMainWindow):
         self.response_editor = XmlEditor(self._theme.palette.xml, read_only=True)
         self.format_button = styled_button("格式化", "blue", "格式化請求 XML (Ctrl+Shift+F)")
         self.copy_button = styled_button("複製", "blue", "複製回應結果")
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(12)
-        splitter.addWidget(self._editor_panel("請求參數（多個用 #~# 隔開）", self.format_button, self.request_editor))
-        splitter.addWidget(self._editor_panel("回應結果", self.copy_button, self.response_editor))
-        splitter.setSizes([1, 1])
-        layout.addWidget(splitter, 1)
+        self.editor_splitter = SashSplitter(Qt.Orientation.Horizontal, self._theme.palette)
+        self.editor_splitter.setChildrenCollapsible(False)
+        self.editor_splitter.setHandleWidth(12)
+        self.editor_splitter.addWidget(
+            self._editor_panel("請求參數（多個用 #~# 隔開）", self.format_button, self.request_editor))
+        self.editor_splitter.addWidget(self._editor_panel("回應結果", self.copy_button, self.response_editor))
+        self.editor_splitter.setSizes([1, 1])
+        layout.addWidget(self.editor_splitter, 1)
         return workspace
 
     def _build_request_card(self, default_timeout: int) -> QFrame:
@@ -389,7 +411,7 @@ class MainWindow(QMainWindow):
             self._workspace_shortcuts.append(shortcut)
         for key, handler in (
             ("F11", self._toggle_settings), ("Esc", self._on_escape), (CONSOLE_SHORTCUT, self.toggle_console),
-            (RAIL_SHORTCUT, self._toggle_rail),
+            (RAIL_SHORTCUT, self._toggle_rail), (PROJECT_SHORTCUT, self.toggle_sidebar),
         ):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
@@ -417,6 +439,9 @@ class MainWindow(QMainWindow):
         self.copy_button.clicked.connect(self._on_copy)
         self.about_button.clicked.connect(self._show_about)
         self.console_button.clicked.connect(self.toggle_console)
+        self.project_button.clicked.connect(self.toggle_sidebar)
+        self.main_splitter.sashPressed.connect(self._on_main_sash_pressed)
+        self.main_splitter.splitterMoved.connect(self._on_main_splitter_moved)
         if self.record_button is not None:
             self.record_button.clicked.connect(self.open_xml_log_viewer)
         self.console_panel.closeRequested.connect(lambda: self.set_console_visible(False))
@@ -819,6 +844,66 @@ class MainWindow(QMainWindow):
         if height > 0:
             self._console_settings.set_height(height)
 
+    # ---------- 專案目錄 ----------
+
+    def sidebar_collapse_width(self) -> int:
+        """約 1 cm 換算成像素（依螢幕 DPI）"""
+        return round(self.logicalDpiX() * SIDEBAR_COLLAPSE_CM / 2.54)
+
+    @Slot()
+    def toggle_sidebar(self) -> None:
+        self.set_sidebar_visible(self.sidebar.isHidden())
+
+    def set_sidebar_visible(self, visible: bool) -> None:
+        if not visible and not self.sidebar.isHidden():
+            self._remember_sidebar_width()
+        self.sidebar.setVisible(visible)
+        self.project_button.setChecked(visible)
+        if visible:
+            total = sum(self.main_splitter.sizes()) or self.main_splitter.width()
+            self.main_splitter.setSizes([self._sidebar_width, max(total - self._sidebar_width, 1)])
+        self._save_sidebar_state()
+
+    def _remember_sidebar_width(self) -> None:
+        width = self.main_splitter.sizes()[0]
+        if width > self.sidebar_collapse_width():
+            self._sidebar_width = width
+
+    @Slot(int)
+    def _on_main_sash_pressed(self, _index: int) -> None:
+        self._sidebar_drag_start = self.main_splitter.sizes()[0]
+
+    @Slot(int, int)
+    def _on_main_splitter_moved(self, _pos: int, _index: int) -> None:
+        if self.main_splitter.sizes()[0] > self.sidebar_collapse_width():
+            return
+        # 拖到只剩約 1 cm：收起專案目錄，下次展開還原成拖曳前的寬度
+        if self._sidebar_drag_start is not None and self._sidebar_drag_start > self.sidebar_collapse_width():
+            self._sidebar_width = self._sidebar_drag_start
+        self._sidebar_drag_start = None
+        self.set_sidebar_visible(False)
+
+    def _read_sidebar_visible(self) -> bool:
+        if self._settings is None:
+            return True
+        return str(self._settings.value(SIDEBAR_VISIBLE_KEY, True)).lower() != "false"
+
+    def _read_sidebar_width(self) -> int:
+        if self._settings is None:
+            return SIDEBAR_WIDTH
+        try:
+            width = int(self._settings.value(SIDEBAR_WIDTH_KEY, SIDEBAR_WIDTH))
+        except (TypeError, ValueError):
+            return SIDEBAR_WIDTH
+        return width if width > self.sidebar_collapse_width() else SIDEBAR_WIDTH
+
+    def _save_sidebar_state(self) -> None:
+        if self._settings is None:
+            return
+        self._settings.setValue(SIDEBAR_VISIBLE_KEY, not self.sidebar.isHidden())
+        self._settings.setValue(SIDEBAR_WIDTH_KEY, self._sidebar_width)
+        self._settings.sync()
+
     # ---------- 設定頁 ----------
 
     def _settings_active(self) -> bool:
@@ -930,6 +1015,8 @@ class MainWindow(QMainWindow):
     def _on_theme_changed(self, palette: ThemePalette) -> None:
         self.request_editor.set_colors(palette.xml)
         self.response_editor.set_colors(palette.xml)
+        for splitter in (self.main_splitter, self.editor_splitter, self.right_splitter):
+            splitter.set_palette(palette)
         for mode, action in self.theme_actions.items():
             action.setChecked(mode is self._theme.mode)
         if self.settings_page is not None:
@@ -946,7 +1033,6 @@ class MainWindow(QMainWindow):
         if "app.name" in keys:
             self._about = replace(self._about, name=settings.name)
             self.setWindowTitle(settings.name)
-            self.app_title.setText(settings.name)
             QApplication.setApplicationName(settings.name)
         if "app.version" in keys:
             self._about = replace(self._about, version=settings.version)
@@ -994,6 +1080,9 @@ class MainWindow(QMainWindow):
         logger.info("程式關閉")
         if not self.console_panel.isHidden():
             self._remember_console_height()
+        if not self.sidebar.isHidden():
+            self._remember_sidebar_width()
+            self._save_sidebar_state()
         self.console_panel.detach()
         self._commit_fields()
         self._pending = None

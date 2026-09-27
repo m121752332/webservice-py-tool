@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QSplitter,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -24,6 +23,7 @@ from PySide6.QtWidgets import (
 from src.core.xml_log import SECTIONS, CallRecord, list_log_dates, read_records
 from src.ui.effects import styled_button
 from src.ui.notification_bar import NotificationBar
+from src.ui.splitter import SashSplitter
 from src.ui.theme import ThemePalette
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
@@ -140,12 +140,12 @@ class XmlLogViewer(QWidget):
         resend_row.addWidget(self.resend_button)
         detail_layout.addLayout(resend_row)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setChildrenCollapsible(False)
-        splitter.setHandleWidth(12)
-        splitter.addWidget(self.table)
-        splitter.addWidget(detail)
-        splitter.setSizes([1, 1])
+        self.splitter = SashSplitter(Qt.Orientation.Horizontal, self._palette)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setHandleWidth(12)
+        self.splitter.addWidget(self.table)
+        self.splitter.addWidget(detail)
+        self.splitter.setSizes([1, 1])
 
         self.count_label = QLabel()
         self.count_label.setObjectName("Hint")
@@ -155,7 +155,7 @@ class XmlLogViewer(QWidget):
         layout.setSpacing(10)
         layout.addLayout(toolbar)
         layout.addWidget(self.notification)
-        layout.addWidget(splitter, 1)
+        layout.addWidget(self.splitter, 1)
         layout.addWidget(self.count_label)
 
     def _connect_signals(self) -> None:
@@ -293,4 +293,5 @@ class XmlLogViewer(QWidget):
         self._palette = palette
         for editor in self.editors.values():
             editor.set_colors(palette.xml)
+        self.splitter.set_palette(palette)
         self._color_status()

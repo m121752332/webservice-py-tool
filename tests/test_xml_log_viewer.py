@@ -148,3 +148,4 @@ def test_unparsable_log_shows_no_records_hint(qapp, tmp_path):
 def test_set_palette_updates_editors(viewer):
     viewer.set_palette(DARK)
     assert all(editor.colors == DARK.xml for editor in viewer.editors.values())
+    assert viewer.splitter.palette_colors == (DARK.text_muted, DARK.accent, DARK.border)
