@@ -138,15 +138,15 @@ def project_icon() -> QIcon:
 def tinted_icon(icon: QIcon, color: str) -> QIcon:
     """保留原圖示的明暗層次與透明度，把色相換成 color（有顏色標記的資料夾用）
 
-    作法：轉灰階後以 Multiply 疊上指定色，再用原圖 alpha 裁切輪廓
+    作法：轉灰階並拉伸到最亮處為純白，以 Multiply 疊上指定色，再用原圖 alpha 裁切輪廓
     """
     sizes = icon.availableSizes() or [QSize(ICON_SIZES[0], ICON_SIZES[0])]
     tinted = QIcon()
     for size in sizes:
         source = icon.pixmap(size).toImage().convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-        image = source.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(
-            QImage.Format.Format_ARGB32_Premultiplied
-        )
+        gray = source.convertToFormat(QImage.Format.Format_Grayscale8)
+        _stretch_to_white(gray)
+        image = gray.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
         painter = QPainter(image)
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
         painter.fillRect(image.rect(), QColor(color))
@@ -155,6 +155,19 @@ def tinted_icon(icon: QIcon, color: str) -> QIcon:
         painter.end()
         tinted.addPixmap(QPixmap.fromImage(image))
     return tinted
+
+
+def _stretch_to_white(gray: QImage) -> None:
+    """灰階拉伸：最亮的像素變成純白，原圖偏暗時染色結果才不會比選單色塊暗（透明處灰階為 0，不影響）"""
+    width, stride = gray.width(), gray.bytesPerLine()
+    bits = gray.bits()
+    rows = [bytes(bits[y * stride:y * stride + width]) for y in range(gray.height())]
+    peak = max((max(row) for row in rows if row), default=0)
+    if peak in (0, 255):
+        return
+    table = bytes(min(255, round(value * 255 / peak)) for value in range(256))
+    for y, row in enumerate(rows):
+        bits[y * stride:y * stride + width] = row.translate(table)
 
 
 def swatch_icon(color: str) -> QIcon:

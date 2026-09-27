@@ -33,3 +33,13 @@ def test_tinted_icon_keeps_shading(qapp):
 def test_swatch_icon_is_filled_with_color(qapp):
     image = swatch_icon("#15703A").pixmap(12, 12).toImage()
     assert image.pixelColor(6, 6) == QColor("#15703A")
+
+
+def test_tinted_icon_brightest_part_matches_color(qapp):
+    """原圖偏暗（例如深色的系統資料夾）時，最亮處仍要等於指定色，才會和選單色塊一致"""
+    image = tinted_icon(two_tone("#404040", "#808080"), "#6AADFB").pixmap(20, 20).toImage()
+    brightest = image.pixelColor(15, 10)
+    target = QColor("#6AADFB")
+    assert max(abs(brightest.red() - target.red()), abs(brightest.green() - target.green()),
+               abs(brightest.blue() - target.blue())) <= 2
+    assert image.pixelColor(5, 10).value() < brightest.value()
