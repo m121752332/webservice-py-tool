@@ -13,6 +13,7 @@ HOST_IMPORTS = ROOT / "plugins" / "settings_editor" / "host_imports.txt"
 PLUGIN_BUILD_SCRIPT = ROOT / "plugins" / "settings_editor" / "build_plugin.py"
 WS_TOOL_YAML_SRC = ROOT / "src" / "app_data" / "ws_tool.yaml"
 WS_TOOL_YAML_DEST = DIST_DIR / "app_data" / "ws_tool.yaml"
+VERSION_FILE = BUILD_DIR / "file_version_info.txt"
 
 
 def _kill_running_exe() -> None:
@@ -29,9 +30,23 @@ def _hidden_imports() -> list[str]:
 def main() -> int:
     _kill_running_exe()
 
+    # file_version_info.txt 放在 build/ 底下（不進版控），但下面會整個清空 build 目錄，
+    # 所以先讀進記憶體，清空後再寫回去，避免每次建置前都要重新執行 grab_version.py
+    old_version_info = VERSION_FILE.read_bytes() if VERSION_FILE.exists() else None
+
     if BUILD_DIR.exists():
         print("移除舊的 build 目錄...")
         shutil.rmtree(BUILD_DIR)
+
+    if old_version_info is not None:
+        BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        VERSION_FILE.write_bytes(old_version_info)
+    else:
+        print(
+            f"[ERROR] {VERSION_FILE} 不存在，請先執行 "
+            f"uv run python src/config/grab_version.py <來源 exe 路徑> {VERSION_FILE}"
+        )
+        return 1
 
     if not HOST_IMPORTS.exists():
         print(f"[ERROR] {HOST_IMPORTS} 不存在，請先執行 uv run python plugins/settings_editor/gen_host_imports.py")
@@ -44,7 +59,7 @@ def main() -> int:
             "--clean", "--noconfirm", "--log-level=WARN",
             f"--icon={ROOT / 'assets' / 'app_icon.ico'}",
             "--add-data", f"{ROOT / 'assets'};assets",
-            "--version-file", str(ROOT / "src" / "config" / "file_version_info.txt"),
+            "--version-file", str(VERSION_FILE),
             "--specpath", str(BUILD_DIR),
             "-F", "-w", "-n", "WebService-Tool",
             *_hidden_imports(),
