@@ -7,7 +7,7 @@ app:
   copyright: "Copyright 2026 GameStudio. All rights reserved."
   # APP icon location
   img: "assets/app_icon.ico"
-  # APP loading timeout value (seconds)
+  # APP request waiting timeout value (seconds)
   timeout: 120
 
   # Log path of the application
