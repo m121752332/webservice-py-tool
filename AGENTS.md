@@ -49,7 +49,7 @@ WebService 測試工具，PySide6 桌面 App，取代 wxPython 舊版。純 Wind
 
 - 不支援 macOS 打包（`pyproject.toml` 的 `required-environments` 已限定 `win32`/`AMD64`），不要加入跨平台相容程式碼
 - `src/app_data/connections.profile`、`src/app_data/ws_tool.yaml` 的既有欄位格式需保持相容，異動請確認舊資料仍可讀取
-- 版本資訊由 `src/config/grab_version.py` 產生 `build/file_version_info.txt`，供 PyInstaller 打包使用，不要手動編輯該檔案
+- 版本資訊由 `src/config/version_info.py` 依 `ws_tool.yaml` 的 app 設定，在 `uv run build` 時自動產生 `build/file_version_info.txt`，供 PyInstaller 打包使用；不要手動編輯該檔案，也不要進版控
 - **禁止刪除或清空 `bin/`、`dist/` 目錄（含目錄本身）**，即使是 `git clean`、`rm -rf` 之類的整批清除操作也不可牽動這兩個目錄：
   - `bin/` 是封裝好的發行 zip（`uv run package`）存放處，只能由開發人員自行清除
   - `dist/` 是最新一次 `uv run build` 的產出，視為目前的發行成品

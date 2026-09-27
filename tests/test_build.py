@@ -13,22 +13,11 @@ def load():
     return module
 
 
-def test_version_template_exe_exists_on_windows():
-    """建置流程依賴這個系統內建 exe 當版本資源範本，路徑打錯會讓所有人建置失敗"""
+def test_write_version_info_reads_repo_ws_tool_yaml(tmp_path):
+    """用 repo 內實際的 ws_tool.yaml，確認產生的內容是本專案的名稱／版本，不是借來的範本"""
     build = load()
-    assert Path(build.VERSION_TEMPLATE_EXE).is_file()
-
-
-def test_generate_version_info_writes_file_from_template(tmp_path):
-    build = load()
-    version_file = tmp_path / "file_version_info.txt"
-    assert build._generate_version_info(build.VERSION_TEMPLATE_EXE, version_file) is True
-    content = version_file.read_text(encoding="utf-8")
-    assert "VSVersionInfo" in content and "StringFileInfo" in content
-
-
-def test_generate_version_info_fails_gracefully_for_missing_template(tmp_path):
-    build = load()
-    version_file = tmp_path / "file_version_info.txt"
-    assert build._generate_version_info(str(tmp_path / "no-such.exe"), version_file) is False
-    assert not version_file.exists()
+    out_file = tmp_path / "file_version_info.txt"
+    build._write_version_info(out_file)
+    content = out_file.read_text(encoding="utf-8")
+    assert "TIPTOP WebService Tool" in content
+    assert "WWAHost" not in content
