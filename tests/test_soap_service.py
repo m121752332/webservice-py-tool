@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
+import http.client
+import socket
 import threading
+import urllib.error
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 import pytest
 from suds.client import Client
-from suds.transport import Reply
+from suds.transport import Reply, TransportError
 from suds.transport.http import HttpTransport
 
-from src.core.soap_service import ParamCountMismatch, SoapService, format_xml, split_params
+from src.core.soap_service import ParamCountMismatch, SoapService, describe_error, format_xml, split_params
 
 WSDL_URL = (Path(__file__).parent / "fixtures" / "sample.wsdl").resolve().as_uri()
 
@@ -266,3 +269,22 @@ def test_concurrent_calls_on_shared_client_keep_envelopes_isolated():
     assert "SECOND-PARAM" not in first_record.sent
     assert "FIRST-PARAM" not in second_record.sent
     assert "GetPODataResponse" in first_record.received and "GetPODataResponse" in second_record.received
+
+
+@pytest.mark.parametrize("error, expected", [
+    (urllib.error.URLError(TimeoutError("timed out")), "連線逾時：超過 10 秒主機仍未回應，主機服務可能關閉或網路不通，無法取得回應！"),
+    (TimeoutError("timed out"), "連線逾時：超過 10 秒主機仍未回應，主機服務可能關閉或網路不通，無法取得回應！"),
+    (urllib.error.URLError(ConnectionRefusedError(10061, "refused")), "主機服務關閉（連線被拒），無法取得回應！"),
+    (urllib.error.URLError(socket.gaierror(11001, "getaddrinfo failed")), "找不到主機，請確認網址是否正確"),
+    (http.client.RemoteDisconnected("closed"), "主機中斷連線，無法取得回應！"),
+    (urllib.error.URLError(ConnectionResetError(10054, "reset")), "主機中斷連線，無法取得回應！"),
+    (TransportError("Service Unavailable", 503), "主機回應 HTTP 503：Service Unavailable"),
+    (urllib.error.URLError("unknown url type"), "無法連線到主機：unknown url type"),
+    (ValueError("WSDL 中找不到方法 X"), "WSDL 中找不到方法 X"),
+])
+def test_describe_error(error, expected):
+    assert describe_error(error, timeout=10) == expected
+
+
+def test_describe_timeout_without_seconds():
+    assert describe_error(TimeoutError("timed out")) == "連線逾時：主機服務可能關閉或網路不通，無法取得回應！"

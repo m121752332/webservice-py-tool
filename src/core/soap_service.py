@@ -2,9 +2,12 @@
 """
 WebService 呼叫：讀取 WSDL 方法、依參數呼叫方法（可交給 recorder 寫請求紀錄）、XML 排版
 """
+import http.client
 import re
+import socket
 import threading
 import time
+import urllib.error
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -13,6 +16,7 @@ from loguru import logger
 from lxml import etree
 from suds.client import Client
 from suds.plugin import MessagePlugin
+from suds.transport import TransportError
 
 from src.core.xml_log import CallRecord
 
@@ -53,6 +57,26 @@ def format_xml(text: str) -> str:
         raise ValueError(f"不是合法的 XML：{err}") from err
     pretty = etree.tostring(root, encoding="unicode", pretty_print=True)
     return f"{declaration}\n{pretty}" if declaration else pretty
+
+
+def describe_error(err: BaseException, timeout: int | None = None) -> str:
+    """把連線／傳輸錯誤轉成使用者看得懂的說明；其他錯誤維持原訊息"""
+    if isinstance(err, TransportError):
+        return f"主機回應 HTTP {err.httpcode}：{err}"
+    # urllib 連線階段的錯誤包在 URLError.reason 裡；讀取回應逾時則直接丟 TimeoutError
+    cause = err.reason if isinstance(err, urllib.error.URLError) else err
+    if isinstance(cause, TimeoutError):
+        waited = f"超過 {timeout} 秒主機仍未回應，" if timeout else ""
+        return f"連線逾時：{waited}主機服務可能關閉或網路不通，無法取得回應！"
+    if isinstance(cause, ConnectionRefusedError):
+        return "主機服務關閉（連線被拒），無法取得回應！"
+    if isinstance(cause, socket.gaierror):
+        return "找不到主機，請確認網址是否正確"
+    if isinstance(cause, (ConnectionResetError, ConnectionAbortedError, http.client.RemoteDisconnected)):
+        return "主機中斷連線，無法取得回應！"
+    if isinstance(err, urllib.error.URLError):
+        return f"無法連線到主機：{cause}"
+    return str(err) or type(err).__name__
 
 
 def _default_client_factory(url: str, timeout: int) -> Client:
