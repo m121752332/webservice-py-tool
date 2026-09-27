@@ -201,3 +201,16 @@ def test_numeric_spinbox_disables_compact_height_and_is_tall_enough(tree):
         assert item.sizeHint(1).height() >= widget.minimumHeight()
         checked += 1
     assert checked > 0
+
+
+def test_widget_max_height_is_not_lower_than_its_min_height(tree):
+    """ListParameterItem（下拉選單）在 makeWidget() 另外寫死 setMaximumHeight(20)，
+    跟我們調高的 minimumHeight 衝突，元件被選取顯示時會撐破列高、蓋到下一列"""
+    checked = 0
+    for item in tree.tree.listAllItems():
+        widget = getattr(item, "widget", None)
+        if widget is None:
+            continue
+        assert widget.maximumHeight() >= widget.minimumHeight(), item.text(0)
+        checked += 1
+    assert checked > 0

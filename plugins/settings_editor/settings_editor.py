@@ -108,36 +108,40 @@ class SettingsTree(QWidget):
         搭配本專案 QComboBox／SpinBox 的 QSS padding 常常放不下，元件會被裁切；改成至少留給元件自己要的高度。
 
         光把列（欄位）本身的 sizeHint 調高還不夠：元件所在的 layoutWidget 用 QHBoxLayout 排版，
-        不會把元件垂直撐滿變高的列，元件會維持原本較矮的高度、上下留白，看起來像是被截掉一塊，
-        所以也要直接把元件本身的最小高度一併調高，撐滿列高
+        不會把元件垂直撐滿變高的列，元件會維持原本較矮的高度、上下留白，看起來像是被截掉一塊；
+        下拉選單（ListParameterItem）又另外寫死 setMaximumHeight(20)，若只調高最小高度會跟這個
+        上限打架，元件被選取顯示時反而會撐破列高、蓋到下一列。這裡統一把元件的最小／最大高度
+        都定死在同一個值，等同 setFixedHeight，兩種問題一次處理
         """
         for item in self.tree.listAllItems():
             widget = getattr(item, "widget", None)
             if widget is None:
                 continue
-            needed = self._natural_height(widget)
+            needed = self._prepare_for_resize(widget)
             target, column = (item.subItem, 0) if getattr(item, "asSubItem", False) else (item, 1)
             current = target.sizeHint(column)
             # 列高最終可能由重設按鈕（defaultBtn）決定、比元件自己要的還高；
-            # 元件的最小高度要跟著最終列高走，兩者對不齊就會留一截空白
+            # 元件的高度要跟著最終列高走，兩者對不齊就會留一截空白或蓋到下一列
             final_height = max(current.height(), needed)
             if current.height() != final_height:
                 target.setSizeHint(column, QSize(current.width(), final_height))
             widget.setMinimumHeight(final_height)
+            widget.setMaximumHeight(final_height)
 
     @staticmethod
-    def _natural_height(widget: QWidget) -> int:
-        """數值欄位用的是 pyqtgraph 自己的 SpinBox，不是一般 QAbstractSpinBox：
+    def _prepare_for_resize(widget: QWidget) -> int:
+        """解除元件自己寫死、會跟後續調整衝突的高度限制，並回傳「元件自然想要多高」的參考值
 
-        它的 sizeHint() 固定回傳高度 0（見 pyqtgraph.widgets.SpinBox），且預設開啟
-        compactHeight，每次繪製都會把自己壓回「剛好文字高度」、無視 QSS 留白——上面用
-        sizeHint() 決定列高的做法對它完全沒用，必須先關掉 compactHeight、直接把高度定死
+        數值欄位（pyqtgraph 的 SpinBox）：sizeHint() 固定回傳高度 0，且預設開啟 compactHeight，
+        每次繪製都會把自己壓回剛好文字高度、無視 QSS 留白，兩者都要先關閉／繞過
+
+        下拉選單（ListParameterItem 的 QComboBox）：makeWidget() 寫死 setMaximumHeight(20)，
+        先解除這個上限，才能讓下面統一設定的高度生效
         """
         if hasattr(widget, "opts") and "compactHeight" in widget.opts:
             widget.setOpts(compactHeight=False)
-            height = widget.fontMetrics().height() + _SPINBOX_PADDING
-            widget.setFixedHeight(height)
-            return height
+            return widget.fontMetrics().height() + _SPINBOX_PADDING
+        widget.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
         return widget.sizeHint().height()
 
     def _pending_editors(self):
