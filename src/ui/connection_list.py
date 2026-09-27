@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -29,6 +31,7 @@ NO_URL = "尚未設定網址"
 FOLDER_ROW_HEIGHT = 36
 FOLDER_FONT_SIZE = 11.5  # 比連線名稱大一級，作為分組標題
 FOLDER_ICON_SIZE = 18
+INDENTATION = 14
 ROOT_LABEL = "最外層"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
 _KIND_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -127,7 +130,7 @@ class ConnectionItemWidget(QWidget):
         self.subtitle = ElidedLabel()
         self.subtitle.setObjectName("ItemSubtitle")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 3, 8, 3)
+        layout.setContentsMargins(3, 3, 8, 3)  # 左邊 3px：加上項目 3px 左框（選取強調條）後，文字剛好對齊資料夾圖示
         layout.setSpacing(0)
         layout.addWidget(self.title)
         layout.addWidget(self.subtitle)
@@ -144,6 +147,28 @@ _DROP_POSITIONS = {
     QAbstractItemView.DropIndicatorPosition.BelowItem: BELOW,
     QAbstractItemView.DropIndicatorPosition.OnItem: ON,
 }
+
+
+class _ShiftedConnectionDelegate(QStyledItemDelegate):
+    """連線列往左移一格縮排：資料夾內的連線對齊資料夾圖示，最外層連線對齊展開箭頭
+
+    連線沒有子項目，不需要自己的展開箭頭欄位；目錄列維持原位
+    """
+
+    @staticmethod
+    def _shifted(option: QStyleOptionViewItem, index: QModelIndex) -> QStyleOptionViewItem:
+        if index.data(_KIND_ROLE) != CONNECTION:
+            return option
+        shifted = QStyleOptionViewItem(option)
+        shifted.rect = option.rect.adjusted(-INDENTATION, 0, 0, 0)
+        return shifted
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, self._shifted(option, index), index)
+
+    def updateEditorGeometry(self, editor, option, index) -> None:
+        # setItemWidget 放進來的連線元件也由這裡定位
+        super().updateEditorGeometry(editor, self._shifted(option, index), index)
 
 
 class _TreeView(QTreeWidget):
@@ -190,7 +215,8 @@ class ConnectionList(QWidget):
         self.tree = _TreeView()
         self.tree.setObjectName("ConnectionList")
         self.tree.setHeaderHidden(True)
-        self.tree.setIndentation(14)
+        self.tree.setIndentation(INDENTATION)
+        self.tree.setItemDelegate(_ShiftedConnectionDelegate(self.tree))
         self.tree.setIconSize(QSize(FOLDER_ICON_SIZE, FOLDER_ICON_SIZE))
         self.tree.setExpandsOnDoubleClick(False)
         self.tree.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -431,3 +431,41 @@ def test_blank_area_menu_actions(qapp):
     actions["新增目錄"].trigger()
     assert added == [(None, None)]
     assert folders == [True]
+
+
+def shown_tree():
+    widget, received = make_tree()
+    widget.resize(292, 400)
+    widget.show()
+    QTest.qWait(10)
+    return widget, received
+
+
+def test_connection_rows_shift_left_one_indent(qapp):
+    """資料夾內的連線對齊資料夾圖示；最外層連線對齊展開箭頭"""
+    widget, _ = shown_tree()
+    tree = widget.tree
+    folder = tree.visualItemRect(folder_item(widget, "f1"))
+    child = widget.item_widget("u1").geometry()
+    root = widget.item_widget("u2").geometry()
+    assert child.left() == folder.left() == tree.indentation()
+    assert root.left() == 0
+    # 資料夾內連線的名稱與資料夾圖示左緣切齊
+    index = tree.indexFromItem(folder_item(widget, "f1"))
+    image = tree.viewport().grab().toImage()
+    y = tree.visualRect(index).center().y()
+    background = image.pixelColor(folder.left(), y)
+    icon_left = next(x for x in range(folder.left(), folder.right()) if image.pixelColor(x, y) != background)
+    title_left = widget.item_widget("u1").title.mapTo(tree.viewport(), QPoint(0, 0)).x()
+    assert title_left == icon_left
+    widget.deleteLater()
+
+
+def test_clicking_shifted_area_selects_connection(qapp):
+    widget, received = shown_tree()
+    tree = widget.tree
+    rect = tree.visualItemRect(widget._item_for("u5"))
+    point = QPoint(tree.indentation() + 2, rect.center().y())  # 原本縮排、現在被連線內容佔用的區域
+    QTest.mouseClick(tree.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    assert widget.current_uuid() == "u5"
+    widget.deleteLater()
