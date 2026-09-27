@@ -384,7 +384,7 @@ def test_connection_menu_moves_into_folder(qapp):
     widget, _ = make_tree()
     moved = record(widget.connectionMoved)
     actions = actions_by_text(widget._context_menu(top_level(widget)[2]))  # u2 在最外層
-    assert list(actions) == ["移動到", "刪除"]
+    assert list(actions) == ["移動到", "顏色", "刪除"]
     targets = actions_by_text(actions["移動到"].menu())
     assert list(targets) == ["最外層", "TIPTOP", FOLDER_UNNAMED]
     assert not targets["最外層"].isEnabled()
@@ -412,7 +412,7 @@ def test_folder_menu_actions(qapp):
     widget.addRequested.connect(lambda: added.append(widget.current_folder()))
     widget.deleteFolderRequested.connect(deleted.append)
     actions = actions_by_text(widget._context_menu(folder_item(widget, "f2")))
-    assert list(actions) == ["新增連線到此目錄", "重新命名", "刪除目錄"]
+    assert list(actions) == ["新增連線到此目錄", "重新命名", "顏色", "刪除目錄"]
     actions["新增連線到此目錄"].trigger()
     assert added == ["f2"]
     actions["重新命名"].trigger()
@@ -543,3 +543,40 @@ def test_update_connection_applies_color(qapp):
     widget = make_colored()
     widget.update_connection(Connection("u2", "測試區", "http://test/ws?WSDL", [], None, "teal"))
     assert title_color(widget, "u2") == "#0D6C65"
+
+
+def color_actions(widget, item):
+    return actions_by_text(widget._context_menu(item))["顏色"].menu().actions()
+
+
+def test_color_menu_lists_default_and_eight_colors(qapp):
+    widget = make_colored()
+    actions = color_actions(widget, folder_item(widget, "f1").child(0))  # u1 為紅色
+    assert [action.text() for action in actions] == ["預設", "紅", "橘", "黃", "綠", "青", "藍", "紫", "粉紅"]
+    assert [action.text() for action in actions if action.isChecked()] == ["紅"]
+    assert actions[0].icon().isNull()
+    assert all(not action.icon().isNull() for action in actions[1:])  # 8 色都有色塊
+    folder_actions = color_actions(widget, folder_item(widget, "f2"))  # f2 未設色
+    assert [action.text() for action in folder_actions if action.isChecked()] == ["預設"]
+
+
+def test_unknown_color_key_checks_default_in_menu(qapp):
+    widget = make_colored()
+    widget.set_item_color("u1", "magenta")
+    actions = color_actions(widget, folder_item(widget, "f1").child(0))
+    assert [action.text() for action in actions if action.isChecked()] == ["預設"]
+
+
+def test_choosing_color_emits_only_when_changed(qapp):
+    widget = make_colored()
+    connection_changes = record(widget.connectionColorChanged)
+    folder_changes = record(widget.folderColorChanged)
+    colors = {action.text(): action for action in color_actions(widget, folder_item(widget, "f1").child(0))}
+    colors["紅"].trigger()  # 已經是紅色，不發訊號
+    colors["綠"].trigger()
+    colors["預設"].trigger()
+    assert connection_changes == [("u1", "green"), ("u1", None)]
+    folder_colors = {action.text(): action for action in color_actions(widget, folder_item(widget, "f1"))}
+    folder_colors["藍"].trigger()  # 已經是藍色
+    folder_colors["紫"].trigger()
+    assert folder_changes == [("f1", "purple")]

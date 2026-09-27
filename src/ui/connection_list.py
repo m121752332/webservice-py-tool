@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 
 from PySide6.QtCore import QModelIndex, QSize, Qt, Signal
-from PySide6.QtGui import QFont, QPainter
+from PySide6.QtGui import QActionGroup, QFont, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -24,8 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.core.connection_store import Connection, Folder
-from src.ui.icons import tinted_icon
-from src.ui.theme import LIGHT, ThemePalette, tag_color
+from src.ui.icons import swatch_icon, tinted_icon
+from src.ui.theme import LIGHT, TAG_COLORS, ThemePalette, tag_color
 
 UNNAMED = "未命名"
 FOLDER_UNNAMED = "未命名目錄"
@@ -35,6 +35,7 @@ FOLDER_FONT_SIZE = 11.5  # 比連線名稱大一級，作為分組標題
 FOLDER_ICON_SIZE = 18
 INDENTATION = 14
 ROOT_LABEL = "最外層"
+DEFAULT_COLOR_LABEL = "預設"
 _UUID_ROLE = Qt.ItemDataRole.UserRole
 _KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 _COLOR_ROLE = Qt.ItemDataRole.UserRole + 2  # 顏色代號，None 為預設色
@@ -208,6 +209,8 @@ class ConnectionList(QWidget):
     folderExpandedChanged = Signal(str, bool)
     connectionMoved = Signal(str, object, int)
     folderMoved = Signal(str, int)
+    folderColorChanged = Signal(str, object)  # 目錄 uuid、顏色代號（None 為預設色）
+    connectionColorChanged = Signal(str, object)  # 連線 uuid、顏色代號（None 為預設色）
 
     def __init__(self, parent=None, palette: ThemePalette = LIGHT):
         super().__init__(parent)
@@ -563,10 +566,11 @@ class ConnectionList(QWidget):
         menu = QMenu(self)
         uuid = _uuid_of(item)
         if _kind_of(item) == CONNECTION:
-            self._fill_connection_menu(menu, uuid, _uuid_of(item.parent()))
+            self._fill_connection_menu(menu, item)
         elif _kind_of(item) == FOLDER:
             menu.addAction("新增連線到此目錄").triggered.connect(lambda: self._add_into(uuid))
             menu.addAction("重新命名").triggered.connect(lambda: self.edit_folder(uuid))
+            self._add_color_menu(menu, item)
             menu.addSeparator()
             menu.addAction("刪除目錄").triggered.connect(lambda: self.deleteFolderRequested.emit(uuid))
         else:
@@ -574,7 +578,8 @@ class ConnectionList(QWidget):
             menu.addAction("新增目錄").triggered.connect(lambda: self.addFolderRequested.emit())
         return menu
 
-    def _fill_connection_menu(self, menu: QMenu, uuid: str, here: str | None) -> None:
+    def _fill_connection_menu(self, menu: QMenu, item: QTreeWidgetItem) -> None:
+        uuid, here = _uuid_of(item), _uuid_of(item.parent())
         layout = self._layout()
         move_menu = menu.addMenu("移動到")
         targets = [(None, ROOT_LABEL)] + [
@@ -586,8 +591,32 @@ class ConnectionList(QWidget):
             action.triggered.connect(
                 lambda _checked=False, target=folder: self.connectionMoved.emit(uuid, target, len(layout.groups[target]))
             )
+        self._add_color_menu(menu, item)
         menu.addSeparator()
         menu.addAction("刪除").triggered.connect(lambda: self.deleteRequested.emit(uuid))
+
+    def _add_color_menu(self, menu: QMenu, item: QTreeWidgetItem) -> None:
+        """「顏色」子選單：預設 + 8 色，目前的顏色打勾；未知代號視為預設"""
+        uuid = _uuid_of(item)
+        key = item.data(0, _COLOR_ROLE)
+        current = key if tag_color(key, self._palette) else None
+        signal = self.folderColorChanged if _kind_of(item) == FOLDER else self.connectionColorChanged
+
+        def choose(chosen: str | None) -> None:
+            if chosen != current:  # 選到目前的顏色不發訊號
+                signal.emit(uuid, chosen)
+
+        color_menu = menu.addMenu("顏色")
+        group = QActionGroup(color_menu)
+        options = [(None, DEFAULT_COLOR_LABEL)] + [(color.key, color.label) for color in TAG_COLORS]
+        for value, label in options:
+            action = color_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(value == current)
+            group.addAction(action)
+            if value is not None:
+                action.setIcon(swatch_icon(tag_color(value, self._palette)))
+            action.triggered.connect(lambda _checked=False, chosen=value: choose(chosen))
 
     def _add_into(self, folder: str | None) -> None:
         """先選取目標目錄（None 為取消選取，即最外層）再要求新增，主視窗依 current_folder() 決定位置"""
