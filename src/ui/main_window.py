@@ -37,7 +37,10 @@ from src.core.soap_service import CallResult, ParamCountMismatch, describe_error
 from src.core.xml_log import CallRecord
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
-from src.ui.icons import about_icon, console_icon, project_icon, rail_toggle_icon, record_icon, theme_icon
+from src.ui.icons import (
+    about_icon, collapse_all_icon, console_icon, expand_all_icon, project_icon, rail_toggle_icon, record_icon,
+    theme_icon,
+)
 from src.ui.log_console import ConsolePanel, ConsoleSettings
 from src.ui.notification_bar import NotificationBar
 from src.ui.plugin_loader import load_settings_plugin
@@ -62,6 +65,7 @@ SIDEBAR_COLLAPSE_CM = 1.0  # 專案目錄拖到剩這個寬度就自動收起
 SIDEBAR_VISIBLE_KEY = "sidebar/visible"
 SIDEBAR_WIDTH_KEY = "sidebar/width"
 SIDEBAR_TITLE = "專案目錄"
+TREE_TOOL_ICON_SIZE = 16  # 專案目錄標題列的全部展開／收合按鈕
 RAIL_WIDTH_EXPANDED = 108  # 展開時：圖示 + 文字
 RAIL_WIDTH_COLLAPSED = 48  # 摺疊時：僅圖示
 RAIL_ICON_SIZE = 20
@@ -204,10 +208,26 @@ class MainWindow(QMainWindow):
         self.sidebar_title = QLabel(SIDEBAR_TITLE)
         self.sidebar_title.setObjectName("SidebarTitle")
         self.connection_list = ConnectionList(palette=self._theme.palette)
+        self.expand_all_button = styled_button("", "subtle", "全部展開")
+        self.collapse_all_button = styled_button("", "subtle", "全部收合")
+        self.expand_all_button.clicked.connect(self.connection_list.expand_all)
+        self.collapse_all_button.clicked.connect(self.connection_list.collapse_all)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(2)
+        title_row.addWidget(self.sidebar_title)
+        title_row.addStretch(1)
+        for button in (self.expand_all_button, self.collapse_all_button):
+            button.setIconSize(QSize(TREE_TOOL_ICON_SIZE, TREE_TOOL_ICON_SIZE))
+            title_row.addWidget(button)
+        self._apply_tree_tool_icons(self._theme.palette)
 
-        layout.addWidget(self.sidebar_title)
+        layout.addLayout(title_row)
         layout.addWidget(self.connection_list, 1)
         return sidebar
+
+    def _apply_tree_tool_icons(self, palette: ThemePalette) -> None:
+        self.expand_all_button.setIcon(expand_all_icon(palette.text))
+        self.collapse_all_button.setIcon(collapse_all_icon(palette.text))
 
     def _build_rail(self) -> QFrame:
         """最左側的可摺疊工具列：上方主控台／請求紀錄，下方主題／關於；摺疊時只顯示圖示"""
@@ -1038,6 +1058,7 @@ class MainWindow(QMainWindow):
         if self.xml_log_viewer is not None:
             self.xml_log_viewer.set_palette(palette)
         self.rail_toggle_button.setIcon(rail_toggle_icon(self._rail_collapsed, palette.text))
+        self._apply_tree_tool_icons(palette)
         self._play_theme_reveal()
 
     def apply_app_settings(self, settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS) -> None:

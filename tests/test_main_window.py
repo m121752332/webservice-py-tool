@@ -1308,3 +1308,27 @@ def test_clearing_color_removes_it_from_profile(env):
     window.connection_list.connectionColorChanged.emit(uuid, None)
     assert ConnectionStore(env.store.path).get(uuid).color is None
     assert window.connection_list.item_color(uuid) is None
+
+
+def test_sidebar_expand_and_collapse_all_buttons(env):
+    first = env.store.add_folder("A").uuid
+    env.store.add_folder("B")
+    env.store.set_folder_expanded(first, False)
+    window = env.make()
+    assert window.expand_all_button.toolTip() == "全部展開"
+    assert window.collapse_all_button.toolTip() == "全部收合"
+    title_row = window.sidebar_title.parentWidget().layout().itemAt(0).layout()
+    widgets = [title_row.itemAt(i).widget() for i in range(title_row.count()) if title_row.itemAt(i).widget()]
+    assert widgets == [window.sidebar_title, window.expand_all_button, window.collapse_all_button]
+
+    window.collapse_all_button.click()
+    assert not any(folder.expanded for folder in ConnectionStore(env.store.path).folders())
+    window.expand_all_button.click()
+    assert all(folder.expanded for folder in ConnectionStore(env.store.path).folders())
+
+
+def test_expand_collapse_icons_follow_theme(env):
+    window = env.make()
+    before = window.expand_all_button.icon().pixmap(16, 16).toImage()
+    env.theme.set_mode(ThemeMode.DARK if env.theme.palette.name == "light" else ThemeMode.LIGHT)
+    assert window.expand_all_button.icon().pixmap(16, 16).toImage() != before

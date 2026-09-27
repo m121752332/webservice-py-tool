@@ -209,12 +209,25 @@ def test_tag_colors_are_eight_unique_keys():
     assert [color.label for color in TAG_COLORS] == ["紅", "橘", "黃", "綠", "青", "藍", "紫", "粉紅"]
 
 
+# 淺色主題的黃色是刻意的例外：純黃壓到 4.5:1 會變成咖啡色，使用者要求維持看得出是黃色
+_CONTRAST_EXCEPTIONS = {("yellow", LIGHT.name)}
+
+
 @pytest.mark.parametrize("palette", [LIGHT, DARK])
 def test_tag_colors_meet_contrast_on_list_and_selection(palette):
     for color in TAG_COLORS:
+        if (color.key, palette.name) in _CONTRAST_EXCEPTIONS:
+            continue
         value = tag_color(color.key, palette)
         assert _contrast(value, palette.bg) >= 4.5, color.key
         assert _contrast(value, palette.surface_hover) >= 4.5, color.key  # 選取列底色
+
+
+def test_light_yellow_exception_still_reads_as_yellow():
+    """黃色不符 4.5:1，但仍要求維持基本可辨識（不能低到看不清楚）"""
+    value = tag_color("yellow", LIGHT)
+    assert _contrast(value, LIGHT.bg) >= 2.4
+    assert _contrast(value, LIGHT.surface_hover) >= 2.4
 
 
 def test_tag_color_picks_theme_variant_and_ignores_unknown():

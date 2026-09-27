@@ -142,7 +142,9 @@ class TagColor:
 TAG_COLORS = (
     TagColor("red", "紅", "#C81E1E", "#FC8181"),
     TagColor("orange", "橘", "#B23C0A", "#FB923C"),
-    TagColor("yellow", "黃", "#8A5A00", "#FACC15"),  # 淺色主題的亮黃在白底看不清，壓成芥末黃
+    # 淺色主題例外：純黃壓到符合 4.5:1 對比會變成咖啡色，使用者要求維持看得出是黃色，
+    # 改採對比度較低（約 2.6:1，見 test_theme 的例外測試）但視覺上明顯是黃色的金黃
+    TagColor("yellow", "黃", "#CA8A04", "#FACC15"),
     TagColor("green", "綠", "#15703A", "#4ADE80"),
     TagColor("teal", "青", "#0D6C65", "#2DD4BF"),
     TagColor("blue", "藍", "#1D4ED8", "#6AADFB"),

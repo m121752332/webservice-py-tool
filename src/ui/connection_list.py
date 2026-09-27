@@ -324,6 +324,24 @@ class ConnectionList(QWidget):
         self._set_color(item, conn.color)
         self._apply_filter(self.search_edit.text())
 
+    def expand_all(self) -> None:
+        self._set_all_expanded(True)
+
+    def collapse_all(self) -> None:
+        """收合所有目錄；目前選取的連線若在目錄內，改選該目錄，避免選取項目被藏起來"""
+        item = self.tree.currentItem()
+        if _kind_of(item) == CONNECTION and item.parent() is not None:
+            self.tree.setCurrentItem(item.parent())
+        self._set_all_expanded(False)
+
+    def _set_all_expanded(self, expanded: bool) -> None:
+        # 逐一設定會各自觸發 itemExpanded／itemCollapsed，沿用既有流程回報並存檔（搜尋中不回報）
+        root = self.tree.invisibleRootItem()
+        for row in range(root.childCount()):
+            item = root.child(row)
+            if _kind_of(item) == FOLDER and item.isExpanded() != expanded:
+                item.setExpanded(expanded)
+
     def set_item_color(self, uuid: str, color: str | None) -> None:
         """更新單一目錄或連線的顏色標記（不重建整棵樹）"""
         item = self._item_for(uuid)

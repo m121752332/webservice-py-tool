@@ -580,3 +580,37 @@ def test_choosing_color_emits_only_when_changed(qapp):
     folder_colors["藍"].trigger()  # 已經是藍色
     folder_colors["紫"].trigger()
     assert folder_changes == [("f1", "purple")]
+
+
+def test_expand_all_and_collapse_all_toggle_every_folder(qapp):
+    widget, _ = make_tree()  # f1 展開、f2 收合
+    changes = record(widget.folderExpandedChanged)
+    widget.expand_all()
+    assert all(item.isExpanded() for item in top_level(widget)[:2])
+    widget.collapse_all()
+    assert not any(item.isExpanded() for item in top_level(widget)[:2])
+    assert changes == [("f2", True), ("f1", False), ("f2", False)]  # 只回報有變動的目錄
+
+
+def test_expand_all_includes_empty_folder(qapp):
+    widget = ConnectionList()
+    widget.set_tree([Folder("e", "空目錄", False)], [])
+    changes = record(widget.folderExpandedChanged)
+    widget.expand_all()
+    assert changes == [("e", True)]
+
+
+def test_collapse_all_moves_selection_to_parent_folder(qapp):
+    widget, _ = make_tree(select="u1")
+    widget.collapse_all()
+    assert widget.current_folder() == "f1"
+    assert widget.current_uuid() is None
+
+
+def test_expand_collapse_all_while_searching_is_not_persisted(qapp):
+    widget, _ = make_tree()
+    changes = record(widget.folderExpandedChanged)
+    widget.search_edit.setText("正式")
+    widget.collapse_all()
+    widget.expand_all()
+    assert changes == []

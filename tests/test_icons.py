@@ -2,7 +2,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 
-from src.ui.icons import swatch_icon, tinted_icon
+from src.ui.icons import collapse_all_icon, expand_all_icon, swatch_icon, tinted_icon
 
 
 def two_tone(left: str | None, right: str) -> QIcon:
@@ -43,3 +43,15 @@ def test_tinted_icon_brightest_part_matches_color(qapp):
     assert max(abs(brightest.red() - target.red()), abs(brightest.green() - target.green()),
                abs(brightest.blue() - target.blue())) <= 2
     assert image.pixelColor(5, 10).value() < brightest.value()
+
+
+def opaque_colors(icon):
+    image = icon.pixmap(20, 20).toImage()
+    return {image.pixelColor(x, y).name() for x in range(20) for y in range(20) if image.pixelColor(x, y).alpha() == 255}
+
+
+def test_expand_and_collapse_all_icons_use_color_and_differ(qapp):
+    expand, collapse = expand_all_icon("#FF0000"), collapse_all_icon("#FF0000")
+    assert opaque_colors(expand) == {"#ff0000"}
+    assert opaque_colors(collapse) == {"#ff0000"}
+    assert expand.pixmap(20, 20).toImage() != collapse.pixmap(20, 20).toImage()

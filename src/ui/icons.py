@@ -181,3 +181,27 @@ def swatch_icon(color: str) -> QIcon:
     painter.drawRoundedRect(QRectF(0, 0, SWATCH_SIZE, SWATCH_SIZE), 3, 3)
     painter.end()
     return QIcon(pixmap)
+
+
+def _chevron_pair_icon(color: str, top: tuple, bottom: tuple) -> QIcon:
+    """上下兩個 V 形箭頭的線稿；座標以 20 px 顯示時的像素為單位"""
+    unit = ICON_CANVAS / 20
+
+    def draw(painter: QPainter) -> None:
+        pen = QPen(QColor(color), 1.6 * unit, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for points in (top, bottom):
+            painter.drawPolyline([QPointF(x * unit, y * unit) for x, y in points])
+
+    return _build_icon(draw)
+
+
+def expand_all_icon(color: str) -> QIcon:
+    """全部展開：上下兩個箭頭往外"""
+    return _chevron_pair_icon(color, ((5, 8), (10, 3), (15, 8)), ((5, 12), (10, 17), (15, 12)))
+
+
+def collapse_all_icon(color: str) -> QIcon:
+    """全部收合：上下兩個箭頭往內合攏（同 JetBrains 的 Collapse All）"""
+    return _chevron_pair_icon(color, ((5, 3), (10, 8), (15, 3)), ((5, 17), (10, 12), (15, 17)))
