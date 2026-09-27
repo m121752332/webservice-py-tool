@@ -108,3 +108,19 @@ def test_list_log_dates_newest_first(tmp_path):
 
 def test_list_log_dates_missing_dir(tmp_path):
     assert list_log_dates(tmp_path / "nope") == []
+
+
+def test_delimiter_like_lines_in_content_round_trip():
+    tricky = "\n".join([
+        "<a>",
+        "----- 回應 -----",
+        "===== 2026-09-26 14:03:22.123 =====",
+        "\\----- 參數 -----",
+        "\\純文字反斜線開頭",
+        "</a>",
+    ])
+    record = replace(RECORD, params=tricky, response="----- SOAP 請求 -----")
+    [parsed] = parse_records(format_record(record, "both"))
+    assert parsed.params == tricky
+    assert parsed.response == "----- SOAP 請求 -----"
+    assert parsed.sent == RECORD.sent

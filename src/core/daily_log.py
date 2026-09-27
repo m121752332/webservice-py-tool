@@ -12,17 +12,21 @@ from pathlib import Path
 DEFAULT_RETENTION_DAYS = 10
 SPLIT_LEVELS = ("info", "debug", "error", "other")
 DEFAULT_SPLIT_LEVELS = ", ".join(SPLIT_LEVELS)
-_RETENTION = re.compile(r"^\s*(\d+)\s*(?:days?)?\s*$", re.IGNORECASE)
+_RETENTION = re.compile(r"^\s*(\d+)\s*(days?|weeks?|months?)?\s*$", re.IGNORECASE)
+_UNIT_DAYS = {"day": 1, "week": 7, "month": 30}  # 沿用舊版 loguru 寫法時，月一律以 30 天計
 
 
 def parse_retention_days(value, default: int = DEFAULT_RETENTION_DAYS) -> int:
-    """「10 days」「1 day」「7」或 int 轉成天數；無法解析或小於 1 時回傳 default"""
+    """「10 days」「2 weeks」「1 month」「7」或 int 轉成天數；無法解析或小於 1 時回傳 default"""
     if isinstance(value, bool):
         return default
     if isinstance(value, int):
         return value if value >= 1 else default
     match = _RETENTION.match(str(value or ""))
-    days = int(match.group(1)) if match else 0
+    if match is None:
+        return default
+    unit = (match.group(2) or "day").lower().rstrip("s")
+    days = int(match.group(1)) * _UNIT_DAYS[unit]
     return days if days >= 1 else default
 
 

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import pytest
+
 from src.config.web_service_config import WebServiceConfig
 from src.utils import global_values
 
@@ -55,6 +57,16 @@ def test_xml_scalar_instead_of_mapping_falls_back_to_defaults(tmp_path, monkeypa
     extra = '    xml: "off"\n'
     config = make_config(tmp_path, monkeypatch, extra)
     assert (config.app_xml_enabled, config.app_xml_content, config.app_xml_retention) == (True, "params", 30)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ('"false"', False), ("'no'", False), ('"off"', False), ('"0"', False),
+    ('"true"', True), ('"Yes"', True), ('"maybe"', True), ("false", False), ("0", False), ("1", True),
+])
+def test_xml_enabled_accepts_string_booleans(tmp_path, monkeypatch, raw, expected):
+    """字串 "false" 等不可被 bool() 當成 True；無法辨識時沿用預設（啟用）"""
+    extra = f"    xml:\n      enabled: {raw}\n"
+    assert make_config(tmp_path, monkeypatch, extra).app_xml_enabled is expected
 
 
 def test_repo_config_has_new_fields():

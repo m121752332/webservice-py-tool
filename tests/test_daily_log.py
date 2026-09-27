@@ -22,7 +22,7 @@ class Clock:
 
 @pytest.mark.parametrize("value, expected", [
     ("10 days", 10), ("1 day", 1), (" 3 Days ", 3), ("7", 7), (30, 30),
-    ("abc", 10), ("", 10), (None, 10), (0, 10), ("0 days", 10), (True, 10),
+    ("abc", 10), ("1 week", 7), ("2 Weeks", 14), ("1 month", 30), ("3 months", 90), ("5 years", 10), ("", 10), (None, 10), (0, 10), ("0 days", 10), (True, 10),
 ])
 def test_parse_retention_days(value, expected):
     assert parse_retention_days(value) == expected

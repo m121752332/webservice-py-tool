@@ -65,8 +65,22 @@ def format_record(record: CallRecord, content: str = DEFAULT_CONTENT) -> str:
         # 統一換行字元為 \n：文字模式寫檔時 Windows 會把 \n 轉成 \r\n，
         # 若內容本身已含 \r\n 就會變成 \r\r\n，讀回來又多出一個空行
         text = getattr(record, name).replace("\r\n", "\n").replace("\r", "\n")
-        lines.append(text.rstrip("\n"))
+        lines.extend(_escape(line) for line in text.rstrip("\n").split("\n"))
     return "\n".join(lines) + "\n"
+
+
+def _is_delimiter(line: str) -> bool:
+    match = _SECTION.match(line)
+    return bool(_HEADER.match(line)) or (match is not None and match.group(1) in _FIELD_BY_TITLE)
+
+
+def _escape(line: str) -> str:
+    """內容行若長得像分隔行（含已加過反斜線的），前面多加一個反斜線，解析時才不會被當成分隔"""
+    return "\\" + line if _is_delimiter(line.lstrip("\\")) else line
+
+
+def _unescape(line: str) -> str:
+    return line[1:] if line.startswith("\\") and _is_delimiter(line.lstrip("\\")) else line
 
 
 def parse_records(text: str) -> list[CallRecord]:
@@ -100,7 +114,7 @@ def _parse_block(stamp: str, lines: list[str]) -> CallRecord | None:
                 current = _FIELD_BY_TITLE[match.group(1)]
                 sections[current] = []
             elif current is not None:
-                sections[current].append(line)
+                sections[current].append(_unescape(line))
         return CallRecord(
             time=moment,
             connection=str(meta.get("connection", "")),

@@ -9,6 +9,21 @@ from src.core.daily_log import DEFAULT_SPLIT_LEVELS
 from src.core.xml_log import DEFAULT_CONTENT, DEFAULT_XML_RETENTION_DAYS
 from src.utils import yaml_values, path_util
 
+_TRUE_TEXTS = ("true", "yes", "on", "1")
+_FALSE_TEXTS = ("false", "no", "off", "0")
+
+
+def _parse_bool(value, default: bool) -> bool:
+    """yaml 的布林值；也接受被加上引號的 "false"、"no" 等字串（bool("false") 會是 True），無法辨識時回傳 default"""
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in _TRUE_TEXTS:
+        return True
+    if text in _FALSE_TEXTS:
+        return False
+    return default
+
 
 class WebServiceConfig:
 
@@ -34,7 +49,7 @@ class WebServiceConfig:
         self.app_log_levels = log_config.get('levels', DEFAULT_SPLIT_LEVELS)
         xml_config = log_config.get('xml')
         xml_config = xml_config if isinstance(xml_config, dict) else {}
-        self.app_xml_enabled = bool(xml_config.get('enabled', True))
+        self.app_xml_enabled = _parse_bool(xml_config.get('enabled', True), default=True)
         self.app_xml_content = xml_config.get('content', DEFAULT_CONTENT)
         self.app_xml_retention = xml_config.get('retention', DEFAULT_XML_RETENTION_DAYS)
 
