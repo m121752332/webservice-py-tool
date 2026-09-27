@@ -157,3 +157,16 @@ def test_programmatic_change_and_load_do_not_emit_editing(tree, doc):
     tree.parameters().child("app", "timeout").setValue(60)
     tree.load([asdict(f) for f in doc.fields])
     assert editing == []
+
+
+def test_widget_rows_are_tall_enough_for_their_editor(tree):
+    """pyqtgraph 預設把值欄縮到編輯元件自然高度的 90%，搭配本專案的 QSS padding
+    常常放不下（尤其 QComboBox、SpinBox），元件會被裁切；值欄高度至少要跟得上"""
+    checked = 0
+    for item in tree.tree.listAllItems():
+        widget = getattr(item, "widget", None)
+        if widget is None:
+            continue
+        assert item.sizeHint(1).height() >= widget.sizeHint().height(), item.text(0)
+        checked += 1
+    assert checked > 0  # 確保這個測試真的檢查到東西，不是空跑

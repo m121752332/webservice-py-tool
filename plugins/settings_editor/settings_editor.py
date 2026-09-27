@@ -6,7 +6,7 @@
 與主程式之間只傳遞 dict、list、str 等基本型別。
 """
 from pyqtgraph.parametertree import Parameter, ParameterTree
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import QAbstractSpinBox, QLineEdit, QVBoxLayout, QWidget
 
 API_VERSION = 1
@@ -83,6 +83,7 @@ class SettingsTree(QWidget):
             if isinstance(widget, QAbstractSpinBox):
                 # SpinBox 輸入文字時不會發出 sigValueChanging，另外監看使用者的輸入
                 widget.lineEdit().textEdited.connect(self.valueEditing)
+        self._fix_widget_row_heights()
 
     def parameters(self) -> Parameter:
         """根參數（測試與進階操作用）"""
@@ -100,6 +101,19 @@ class SettingsTree(QWidget):
                 else:
                     widget.updateText()
             item.widgetValueChanged()  # 也涵蓋方向鍵／滾輪尚在延遲中的值
+
+    def _fix_widget_row_heights(self) -> None:
+        """pyqtgraph 為求緊湊，會把值欄的高度縮到編輯元件自然高度的 90%（見 basetypes.WidgetParameterItem），
+        搭配本專案 QComboBox／SpinBox 的 QSS padding 常常放不下，元件會被裁切；改成至少留給元件自己要的高度"""
+        for item in self.tree.listAllItems():
+            widget = getattr(item, "widget", None)
+            if widget is None:
+                continue
+            target, column = (item.subItem, 0) if getattr(item, "asSubItem", False) else (item, 1)
+            current = target.sizeHint(column)
+            needed = widget.sizeHint().height()
+            if current.height() < needed:
+                target.setSizeHint(column, QSize(current.width(), needed))
 
     def _pending_editors(self):
         """(參數項目, 編輯元件)：只有文字與數值欄位會延遲提交"""
