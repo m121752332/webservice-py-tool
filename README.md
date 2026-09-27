@@ -84,18 +84,18 @@ WebService服務部署到了服務器，但是只能本地訪問，下載soapui�
         <td><label>收集請求資料內容</label></td>
     </tr>
     <tr>
-        <td><img src="docs/webservice_tool_002.png"/></td>
+        <td><img src="docs/webservice_tool_001.png"/></td>
     </tr>
     <tr>
         <td><label>執行請求參數取得回應資料</label></td>
     </tr>
     <tr>
+        <td><img src="docs/webservice_tool_002.png"/></td>
+    </tr>
+    <tr>
+        <td><label>主控台記錄面板範例圖</label></td>
+    </tr>
+    <tr>
         <td><img src="docs/webservice_tool_003.png"/></td>
-    </tr>
-    <tr>
-        <td><label>主控台記錄面板</label></td>
-    </tr>
-    <tr>
-        <td><img src="docs/webservice_tool_004.png"/></td>
     </tr>
 </table>
