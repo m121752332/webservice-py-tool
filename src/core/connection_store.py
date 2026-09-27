@@ -18,6 +18,7 @@ class Folder:
     uuid: str
     name: str = ""
     expanded: bool = True
+    color: str | None = None  # 顏色代號（例如 "red"），None 為預設色
 
 
 @dataclass
@@ -27,6 +28,7 @@ class Connection:
     url: str = ""
     methods: list[str] = field(default_factory=list)
     folder: str | None = None  # 所屬目錄 uuid，None 表示最外層
+    color: str | None = None  # 顏色代號（例如 "red"），None 為預設色
 
 
 def _copy(conn: Connection) -> Connection:
@@ -61,6 +63,11 @@ def _parse_expanded(value) -> bool:
     return value
 
 
+def _parse_color(value) -> str | None:
+    """color 欄位：缺少、空字串或非字串一律視為預設色；只影響顯示，不因此判定檔案損毀"""
+    return value if isinstance(value, str) and value else None
+
+
 def _parse_folders(raw) -> list[Folder]:
     """folders 欄位：缺少時（舊版設定檔）視為沒有目錄，必須是物件清單"""
     if raw is None:
@@ -72,9 +79,24 @@ def _parse_folders(raw) -> list[Folder]:
             uuid=item.get("uuid") or "",
             name=item.get("name") or "",
             expanded=_parse_expanded(item.get("expanded", True)),
+            color=_parse_color(item.get("color")),
         )
         for item in raw
     ]
+
+
+def _folder_data(folder: Folder) -> dict:
+    data = {"uuid": folder.uuid, "name": folder.name, "expanded": folder.expanded}
+    if folder.color:
+        data["color"] = folder.color  # 未設色不寫入，檔案格式與舊版相同
+    return data
+
+
+def _connection_data(conn: Connection) -> dict:
+    data = {"uuid": conn.uuid, "name": conn.name, "url": conn.url, "method": conn.methods, "folder": conn.folder}
+    if conn.color:
+        data["color"] = conn.color
+    return data
 
 
 class ConnectionStore:
@@ -130,6 +152,10 @@ class ConnectionStore:
         self._find(uuid).methods = list(methods)
         self._save()
 
+    def set_color(self, uuid: str, color: str | None) -> None:
+        self._find(uuid).color = color or None
+        self._save()
+
     def move_connection(self, uuid: str, folder: str | None, index: int) -> None:
         """移到 folder（None 為最外層）群組的第 index 個位置，index 以移除自己之後的群組計算"""
         conn = self._find(uuid)
@@ -166,6 +192,10 @@ class ConnectionStore:
 
     def set_folder_expanded(self, uuid: str, expanded: bool) -> None:
         self._find_folder(uuid).expanded = expanded
+        self._save()
+
+    def set_folder_color(self, uuid: str, color: str | None) -> None:
+        self._find_folder(uuid).color = color or None
         self._save()
 
     def remove_folder(self, uuid: str) -> None:
@@ -212,6 +242,7 @@ class ConnectionStore:
                     url=item.get("url") or "",
                     methods=_parse_methods(item.get("method")),
                     folder=_parse_folder_ref(item.get("folder")),
+                    color=_parse_color(item.get("color")),
                 )
                 for item in data["connections"]
             ]
@@ -243,14 +274,8 @@ class ConnectionStore:
 
     def _save(self) -> None:
         data = {
-            "folders": [
-                {"uuid": folder.uuid, "name": folder.name, "expanded": folder.expanded}
-                for folder in self._folders
-            ],
-            "connections": [
-                {"uuid": conn.uuid, "name": conn.name, "url": conn.url, "method": conn.methods, "folder": conn.folder}
-                for conn in self._connections
-            ],
+            "folders": [_folder_data(folder) for folder in self._folders],
+            "connections": [_connection_data(conn) for conn in self._connections],
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         # 先寫暫存檔再取代，寫到一半當掉也不會毀損原檔

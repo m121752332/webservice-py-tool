@@ -273,3 +273,78 @@ def test_bad_folder_data_is_treated_as_corrupt(tmp_path, data):
     assert store.recovered_from_corruption is True
     assert store.all() == [] and store.folders() == []
     assert read_json(path) == {"folders": [], "connections": []}
+
+
+def test_colors_default_to_none_and_are_not_written(tmp_path):
+    path = tmp_path / "connections.profile"
+    store = ConnectionStore(path)
+    folder = store.add_folder("F")
+    conn = store.add(folder.uuid)
+    assert store.get_folder(folder.uuid).color is None
+    assert store.get(conn.uuid).color is None
+    data = read_json(path)
+    assert "color" not in data["folders"][0]  # 未設色不寫入，格式與舊版相同
+    assert "color" not in data["connections"][0]
+
+
+def test_set_colors_persist_reload_and_clear(tmp_path):
+    path = tmp_path / "connections.profile"
+    store = ConnectionStore(path)
+    folder = store.add_folder("F")
+    conn = store.add(folder.uuid)
+    store.set_folder_color(folder.uuid, "blue")
+    store.set_color(conn.uuid, "red")
+    data = read_json(path)
+    assert data["folders"][0]["color"] == "blue"
+    assert data["connections"][0]["color"] == "red"
+    reloaded = ConnectionStore(path)
+    assert reloaded.get_folder(folder.uuid).color == "blue"
+    assert reloaded.get(conn.uuid).color == "red"
+
+    store.set_folder_color(folder.uuid, None)
+    store.set_color(conn.uuid, "")
+    data = read_json(path)
+    assert "color" not in data["folders"][0]
+    assert "color" not in data["connections"][0]
+
+
+@pytest.mark.parametrize("value", [123, "", None, ["red"], {"k": "red"}])
+def test_invalid_color_is_default_not_corruption(tmp_path, value):
+    path = tmp_path / "connections.profile"
+    path.write_text(json.dumps({
+        "folders": [{"uuid": "f", "name": "F", "expanded": True, "color": value}],
+        "connections": [{"uuid": "u", "name": "", "url": "", "method": [], "folder": "f", "color": value}],
+    }), encoding="utf-8")
+    store = ConnectionStore(path)
+    assert store.recovered_from_corruption is False
+    assert store.get_folder("f").color is None
+    assert store.get("u").color is None
+
+
+def test_unknown_color_key_is_kept_by_store(tmp_path):
+    """核心層不認識色票，只保證型別；未知代號由 UI 當作預設色顯示"""
+    path = tmp_path / "connections.profile"
+    path.write_text(json.dumps({
+        "folders": [],
+        "connections": [{"uuid": "u", "name": "", "url": "", "method": [], "color": "magenta"}],
+    }), encoding="utf-8")
+    assert ConnectionStore(path).get("u").color == "magenta"
+
+
+def test_removing_folder_keeps_connection_colors(tmp_path):
+    store = ConnectionStore(tmp_path / "c.profile")
+    folder = store.add_folder("F")
+    conn = store.add(folder.uuid)
+    store.set_folder_color(folder.uuid, "blue")
+    store.set_color(conn.uuid, "green")
+    store.remove_folder(folder.uuid)
+    moved = store.get(conn.uuid)
+    assert (moved.folder, moved.color) == (None, "green")
+
+
+def test_set_color_unknown_uuid_raises_key_error(tmp_path):
+    store = ConnectionStore(tmp_path / "c.profile")
+    with pytest.raises(KeyError):
+        store.set_color("nope", "red")
+    with pytest.raises(KeyError):
+        store.set_folder_color("nope", "red")
