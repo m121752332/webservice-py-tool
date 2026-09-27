@@ -203,7 +203,7 @@ class MainWindow(QMainWindow):
 
         self.sidebar_title = QLabel(SIDEBAR_TITLE)
         self.sidebar_title.setObjectName("SidebarTitle")
-        self.connection_list = ConnectionList()
+        self.connection_list = ConnectionList(palette=self._theme.palette)
 
         layout.addWidget(self.sidebar_title)
         layout.addWidget(self.connection_list, 1)
@@ -429,6 +429,8 @@ class MainWindow(QMainWindow):
         self.connection_list.folderExpandedChanged.connect(self._on_folder_expanded_changed)
         self.connection_list.connectionMoved.connect(self._on_connection_moved)
         self.connection_list.folderMoved.connect(self._on_folder_moved)
+        self.connection_list.folderColorChanged.connect(self._on_folder_color_changed)
+        self.connection_list.connectionColorChanged.connect(self._on_connection_color_changed)
         self.name_edit.editingFinished.connect(self._commit_name)
         self.url_edit.editingFinished.connect(self._commit_url)
         self.url_edit.textChanged.connect(self._update_url_hint)
@@ -556,6 +558,16 @@ class MainWindow(QMainWindow):
     @Slot(str, bool)
     def _on_folder_expanded_changed(self, uuid: str, expanded: bool) -> None:
         self._store.set_folder_expanded(uuid, expanded)
+
+    @Slot(str, object)
+    def _on_folder_color_changed(self, uuid: str, color: str | None) -> None:
+        self._store.set_folder_color(uuid, color)
+        self.connection_list.set_item_color(uuid, color)
+
+    @Slot(str, object)
+    def _on_connection_color_changed(self, uuid: str, color: str | None) -> None:
+        self._store.set_color(uuid, color)
+        self.connection_list.set_item_color(uuid, color)
 
     @Slot(str)
     def _on_delete_folder_requested(self, uuid: str) -> None:
@@ -1022,6 +1034,7 @@ class MainWindow(QMainWindow):
         if self.settings_page is not None:
             self.settings_page.set_palette(palette)
         self.console_panel.set_palette(palette)
+        self.connection_list.set_palette(palette)
         if self.xml_log_viewer is not None:
             self.xml_log_viewer.set_palette(palette)
         self.rail_toggle_button.setIcon(rail_toggle_icon(self._rail_collapsed, palette.text))

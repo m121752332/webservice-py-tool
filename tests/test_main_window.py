@@ -1279,3 +1279,32 @@ def test_theme_change_updates_viewer(env, tmp_path):
     window.open_xml_log_viewer()
     env.theme.set_mode(ThemeMode.DARK)
     assert window.xml_log_viewer.editors["params"].colors == DARK.xml
+
+
+def test_item_colors_persist_and_follow_theme(env):
+    folder = env.store.add_folder("科林儀器").uuid
+    uuid = seed(env.store)
+    env.store.move_connection(uuid, folder, 0)
+    window = env.make()
+    window.connection_list.connectionColorChanged.emit(uuid, "red")
+    window.connection_list.folderColorChanged.emit(folder, "blue")
+
+    reloaded = ConnectionStore(env.store.path)
+    assert reloaded.get(uuid).color == "red"
+    assert reloaded.get_folder(folder).color == "blue"
+    assert window.connection_list.item_color(uuid) == "red"
+    assert env.make().connection_list.item_color(folder) == "blue"  # 重開後仍在
+
+    env.theme.set_mode(ThemeMode.DARK)
+    title = window.connection_list.item_widget(uuid).title
+    title.ensurePolished()
+    assert title.palette().color(title.foregroundRole()).name().upper() == "#FC8181"
+
+
+def test_clearing_color_removes_it_from_profile(env):
+    uuid = seed(env.store)
+    env.store.set_color(uuid, "green")
+    window = env.make()
+    window.connection_list.connectionColorChanged.emit(uuid, None)
+    assert ConnectionStore(env.store.path).get(uuid).color is None
+    assert window.connection_list.item_color(uuid) is None
