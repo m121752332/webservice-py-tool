@@ -19,7 +19,8 @@ from src.core.xml_log import CallRecord
 from src.ui import main_window as main_window_module
 from src.ui.log_console import ConsoleSettings
 from src.ui.main_window import AboutInfo, CANCEL_LABEL, LOAD_LABEL, MainWindow, RUN_LABEL, format_size
-from src.ui.theme import DARK, ThemeManager, ThemeMode
+from src.ui.theme import DARK, LIGHT, ThemeManager, ThemeMode
+from src.ui.theme_transition import CircularReveal, reveal_origin
 from tests.helpers import wait_until, write_settings
 
 ABOUT = AboutInfo("WebService 測試工具", "v2.0.0", "Copyright", "https://example.com")
@@ -276,6 +277,37 @@ def test_theme_change_recolors_editors_and_menu(env):
     assert window.theme_actions[ThemeMode.DARK].isChecked()
 
 
+def test_theme_switch_plays_circular_reveal(env):
+    env.theme.set_mode(ThemeMode.LIGHT)
+    window = env.make()
+    window.show()
+    env.theme.set_mode(ThemeMode.DARK)
+    reveal = window.findChild(CircularReveal)
+    assert reveal is not None and reveal.isVisible()
+    assert reveal.geometry() == window.rect()
+    assert reveal._origin == reveal_origin(DARK, window.rect())  # 淺→深：左下角
+    wait_until(lambda: window.findChild(CircularReveal) is None)
+
+
+def test_theme_switch_during_reveal_replaces_previous(env):
+    env.theme.set_mode(ThemeMode.LIGHT)
+    window = env.make()
+    window.show()
+    env.theme.set_mode(ThemeMode.DARK)
+    first = window.findChild(CircularReveal)
+    env.theme.set_mode(ThemeMode.LIGHT)
+    reveals = [r for r in window.findChildren(CircularReveal) if r.isVisible()]
+    assert len(reveals) == 1 and reveals[0] is not first
+    assert reveals[0]._origin == reveal_origin(LIGHT, window.rect())  # 深→淺：右上角
+
+
+def test_theme_switch_without_visible_window_skips_reveal(env):
+    env.theme.set_mode(ThemeMode.LIGHT)
+    window = env.make()
+    env.theme.set_mode(ThemeMode.DARK)
+    assert window.findChild(CircularReveal) is None
+
+
 def test_theme_menu_action_sets_mode(env):
     window = env.make()
     window.theme_actions[ThemeMode.LIGHT].trigger()
@@ -394,7 +426,38 @@ def test_run_failure_shows_error(env):
     window.run_button.click()
     wait_until(lambda: window.status_state.text() == "● 失敗")
     assert window.notification.level == "error"
-    assert window.notification.text == "請求失敗：timed out"
+    assert window.notification.text == "請求失敗：連線逾時：超過 30 秒主機仍未回應，主機服務可能關閉或網路不通，無法取得回應！"
+    assert window.status_detail.text().startswith("請求失敗 · 已等待 ")
+
+
+def test_busy_status_counts_waited_seconds(env):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.timeout_spin.setValue(120)
+    now = [100.0]
+    window._clock = lambda: now[0]
+    window.run_button.click()
+    assert window.status_detail.text() == "已等待 0 秒 / 逾時 120 秒"
+    assert window._wait_timer.isActive()
+    now[0] = 112.6
+    window._wait_timer.timeout.emit()
+    assert window.status_state.text() == "執行中…"
+    assert window.status_detail.text() == "已等待 12 秒 / 逾時 120 秒"
+    env.service.gate.set()
+    wait_until(lambda: window.status_state.text() == "● 成功")
+    assert not window._wait_timer.isActive()
+
+
+def test_cancel_stops_wait_counter(env):
+    seed(env.store)
+    env.service.gate = threading.Event()
+    window = env.make()
+    window.load_button.click()
+    assert window.status_detail.text() == "已等待 0 秒 / 逾時 30 秒"
+    window.load_button.click()  # 取消
+    assert not window._wait_timer.isActive()
+    assert window.status_state.text() == "已取消"
 
 
 def test_busy_state_disables_other_actions(env):
@@ -885,26 +948,59 @@ def test_saving_name_only_keeps_session_timeout_and_icon(env, app_calls):
 
 # ---------- 主控台 ----------
 
-def footer_buttons(window):
-    footer = window.sidebar.layout().itemAt(2).layout()
-    return [footer.itemAt(i).widget() for i in range(footer.count()) if footer.itemAt(i).widget()]
+def rail_buttons(window):
+    layout = window.rail.layout()
+    return [layout.itemAt(i).widget() for i in range(layout.count()) if layout.itemAt(i).widget()]
 
 
-def test_console_button_is_after_about_and_panel_hidden_by_default(env):
+def test_rail_order_and_console_panel_hidden_by_default(env):
     window = env.make()
-    assert footer_buttons(window) == [window.theme_button, window.about_button, window.console_button]
+    assert rail_buttons(window) == [
+        window.rail_toggle_button, window.console_button, window.theme_button, window.about_button,
+    ]
     assert window.console_button.text() == "主控台"
     assert window.console_panel.isHidden()
     assert not window.console_button.isChecked()
 
 
-def test_footer_buttons_fit_sidebar(env):
+def test_rail_fits_its_own_width(env):
     window = env.make()
-    footer = window.sidebar.layout().itemAt(2).layout()
-    buttons = footer_buttons(window)
-    needed = sum(b.sizeHint().width() for b in buttons) + footer.spacing() * (len(buttons) - 1)
-    margins = window.sidebar.layout().contentsMargins()
-    assert needed <= window.sidebar.width() - margins.left() - margins.right()
+    layout = window.rail.layout()
+    buttons = rail_buttons(window)
+    needed = sum(b.sizeHint().height() for b in buttons) + layout.spacing() * (len(buttons) - 1)
+    margins = layout.contentsMargins()
+    assert needed <= window.rail.height() - margins.top() - margins.bottom()
+
+
+def test_rail_collapse_toggle_hides_labels_and_persists(env):
+    window = env.make()
+    assert window.rail.width() == 108
+    for button in (window.theme_button, window.about_button, window.console_button):
+        assert button.text() != ""
+
+    window.rail_toggle_button.click()
+
+    assert window.rail.width() == 48
+    for button in (window.theme_button, window.about_button, window.console_button):
+        assert button.text() == ""
+    assert str(env.qsettings.value("rail/collapsed")).lower() == "true"
+
+    window2 = env.make()
+    assert window2.rail.width() == 48
+    assert window2.theme_button.text() == ""
+
+    window.rail_toggle_button.click()
+    assert window.rail.width() == 108
+    assert window.theme_button.text() == "主題"
+    assert str(env.qsettings.value("rail/collapsed")).lower() == "false"
+
+
+def test_rail_toggle_shortcut(env):
+    window = env.make()
+    press_shortcut(window, "Alt+Q")
+    assert window.rail.width() == 48
+    press_shortcut(window, "Alt+Q")
+    assert window.rail.width() == 108
 
 
 def test_console_toggles_via_button_shortcut_and_close(env):
@@ -912,9 +1008,9 @@ def test_console_toggles_via_button_shortcut_and_close(env):
     window.console_button.click()
     assert not window.console_panel.isHidden() and window.console_button.isChecked()
     assert ConsoleSettings(env.qsettings).visible() is True
-    press_shortcut(window, "Ctrl+`")
+    press_shortcut(window, "Alt+C")
     assert window.console_panel.isHidden() and not window.console_button.isChecked()
-    press_shortcut(window, "Ctrl+`")
+    press_shortcut(window, "Alt+C")
     window.console_panel.close_button.click()
     assert window.console_panel.isHidden() and not window.console_button.isChecked()
     assert ConsoleSettings(env.qsettings).visible() is False
@@ -955,11 +1051,11 @@ def test_console_height_saved_when_hidden(env):
 def test_console_usable_on_settings_page(env):
     window = env.make()
     open_settings(window)
-    press_shortcut(window, "Ctrl+`")
+    press_shortcut(window, "Alt+C")
     assert not window.console_panel.isHidden()
     assert window.console_button.isEnabled() and window.theme_button.isEnabled()
     assert not window.connection_list.isEnabled()
-    assert shortcut_enabled(window, "Ctrl+`")
+    assert shortcut_enabled(window, "Alt+C")
 
 
 def test_console_shows_load_and_run_logs(env):
@@ -1009,8 +1105,11 @@ def test_record_button_hidden_without_log_dir(env):
 
 def test_record_button_and_f10_open_viewer(env, tmp_path):
     window = env.make(xml_log_dir=tmp_path)
-    assert footer_buttons(window)[-1] is window.record_button
-    assert window.record_button.text() == "" and "F10" in window.record_button.toolTip()
+    assert rail_buttons(window) == [
+        window.rail_toggle_button, window.console_button, window.record_button,
+        window.theme_button, window.about_button,
+    ]
+    assert window.record_button.text() == "查紀錄" and "F10" in window.record_button.toolTip()
     press_shortcut(window, "F10")
     viewer = window.xml_log_viewer
     assert viewer is not None and viewer.isVisible()
@@ -1018,13 +1117,22 @@ def test_record_button_and_f10_open_viewer(env, tmp_path):
     assert window.xml_log_viewer is viewer  # 只建立一次
 
 
-def test_footer_buttons_fit_sidebar_with_record_button(env, tmp_path):
+def test_rail_fits_its_own_width_with_record_button(env, tmp_path):
     window = env.make(xml_log_dir=tmp_path)
-    footer = window.sidebar.layout().itemAt(2).layout()
-    buttons = footer_buttons(window)
-    needed = sum(b.sizeHint().width() for b in buttons) + footer.spacing() * (len(buttons) - 1)
-    margins = window.sidebar.layout().contentsMargins()
-    assert needed <= window.sidebar.width() - margins.left() - margins.right()
+    layout = window.rail.layout()
+    buttons = rail_buttons(window)
+    needed = sum(b.sizeHint().height() for b in buttons) + layout.spacing() * (len(buttons) - 1)
+    margins = layout.contentsMargins()
+    assert needed <= window.rail.height() - margins.top() - margins.bottom()
+
+
+def test_record_button_label_follows_rail_collapse(env, tmp_path):
+    window = env.make(xml_log_dir=tmp_path)
+    assert window.record_button.text() == "查紀錄"
+    window.rail_toggle_button.click()
+    assert window.record_button.text() == ""
+    window.rail_toggle_button.click()
+    assert window.record_button.text() == "查紀錄"
 
 
 def test_load_record_selects_connection_and_fills_fields(env, tmp_path):

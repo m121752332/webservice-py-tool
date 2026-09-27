@@ -3,12 +3,15 @@
 主視窗：左側連線清單 + 右側工作區
 """
 from collections.abc import Iterable
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import QSettings, QSize, Qt, Slot
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QIcon, QKeySequence, QShortcut, QTextCursor
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Slot
+from PySide6.QtGui import (
+    QAction, QActionGroup, QGuiApplication, QIcon, QKeySequence, QPixmap, QShortcut, QTextCursor,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -31,16 +34,17 @@ from PySide6.QtWidgets import (
 from src.config.app_settings import HOT_RELOAD_KEYS, TIMEOUT_MAX, TIMEOUT_MIN, AppSettings
 from src.core.connection_store import Connection, ConnectionStore
 from src.core.log_buffer import LogBuffer
-from src.core.soap_service import CallResult, ParamCountMismatch, format_xml
+from src.core.soap_service import CallResult, ParamCountMismatch, describe_error, format_xml
 from src.core.xml_log import CallRecord
 from src.ui.connection_list import FOLDER_UNNAMED, UNNAMED, ConnectionList
 from src.ui.effects import styled_button
-from src.ui.icons import about_icon, console_icon, record_icon, theme_icon
+from src.ui.icons import about_icon, console_icon, rail_toggle_icon, record_icon, theme_icon
 from src.ui.log_console import ConsolePanel, ConsoleSettings
 from src.ui.notification_bar import NotificationBar
 from src.ui.plugin_loader import load_settings_plugin
 from src.ui.settings_page import SettingsPage
 from src.ui.theme import ThemeManager, ThemeMode, ThemePalette, repolish
+from src.ui.theme_transition import CircularReveal, reveal_origin
 from src.ui.workers import run_in_background
 from src.ui.xml_editor import XmlEditor
 from src.ui.xml_log_viewer import XmlLogViewer
@@ -51,12 +55,18 @@ LOG_TEXT_CAP = 2000
 LOAD_LABEL = "讀取 WSDL"
 RUN_LABEL = "▶ 執行"
 CANCEL_LABEL = "取消"
+WAIT_TICK_MS = 1000  # 等待中狀態列的秒數更新間隔
 NEW_FOLDER_NAME = "新目錄"
-SIDEBAR_WIDTH = 292  # 四顆 footer 按鈕（主題／關於／主控台／請求紀錄）要塞進側欄
-FOOTER_ICON_SIZE = 20
-FOOTER_SPACING = 6  # 四顆 footer 按鈕要塞進側欄內容寬度 268 px（292 - 左右邊界各 12）
-CONSOLE_SHORTCUT = "Ctrl+`"
+SIDEBAR_WIDTH = 292
+RAIL_WIDTH_EXPANDED = 108  # 展開時：圖示 + 文字
+RAIL_WIDTH_COLLAPSED = 48  # 摺疊時：僅圖示
+RAIL_ICON_SIZE = 20
+RAIL_SPACING = 6
+RAIL_MARGIN = 8
+RAIL_COLLAPSED_KEY = "rail/collapsed"
+CONSOLE_SHORTCUT = "Alt+C"
 RECORD_SHORTCUT = "F10"
+RAIL_SHORTCUT = "Alt+Q"
 CONSOLE_MIN_HEIGHT = 120
 THEME_LABELS = {ThemeMode.SYSTEM: "跟隨系統", ThemeMode.LIGHT: "淺色", ThemeMode.DARK: "深色"}
 
@@ -106,10 +116,19 @@ class MainWindow(QMainWindow):
         self._pending = None  # 進行中工作的 tag：(kind, seq, uuid)
         self._seq = 0
         self._tasks = {}  # tag -> Task，保留參照直到收到回呼
+        self._clock = time.monotonic  # 測試可替換
+        self._wait_started = 0.0
+        self._wait_timeout = 0
+        self._wait_timer = QTimer(self)
+        self._wait_timer.setInterval(WAIT_TICK_MS)
+        self._wait_timer.timeout.connect(self._show_waited)
         self._console_settings = ConsoleSettings(settings)
         self._log_buffer = log_buffer if log_buffer is not None else LogBuffer()
         self._xml_log_dir = Path(xml_log_dir) if xml_log_dir is not None else None
         self.xml_log_viewer: XmlLogViewer | None = None  # 首次按 F10 才建立
+        self._settings = settings
+        self._reveal_from: tuple[QPixmap, ThemePalette] | None = None  # 主題切換前的畫面與新 palette
+        self._rail_collapsed = self._read_rail_collapsed()
 
         self.setWindowTitle(about.name)
         self.resize(1100, 700)
@@ -117,6 +136,7 @@ class MainWindow(QMainWindow):
         self._build_ui(default_timeout)
         self._build_shortcuts()
         self._connect_signals()
+        self._theme.themeAboutToChange.connect(self._on_theme_about_to_change)
         self._theme.themeChanged.connect(self._on_theme_changed)
         self._reset_status()
         self._load_initial_connections()
@@ -129,6 +149,8 @@ class MainWindow(QMainWindow):
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+        self.rail = self._build_rail()
+        self._apply_rail_state()
         self.sidebar = self._build_sidebar()
         self.workspace = self._build_workspace(default_timeout)
         self.stack = QStackedWidget()
@@ -143,6 +165,7 @@ class MainWindow(QMainWindow):
         self.right_splitter.setStretchFactor(0, 1)  # 視窗放大時多出的空間給上方，面板維持高度
         self.right_splitter.setStretchFactor(1, 0)
         self.console_panel.hide()
+        root.addWidget(self.rail)
         root.addWidget(self.sidebar)
         root.addWidget(self.right_splitter, 1)
         self.setCentralWidget(central)
@@ -167,34 +190,75 @@ class MainWindow(QMainWindow):
         self.app_title.setWordWrap(True)
         self.connection_list = ConnectionList()
 
+        layout.addWidget(self.app_title)
+        layout.addWidget(self.connection_list, 1)
+        return sidebar
+
+    def _build_rail(self) -> QFrame:
+        """最左側的可摺疊工具列：上方主控台／請求紀錄，下方主題／關於；摺疊時只顯示圖示"""
+        rail = QFrame()
+        rail.setObjectName("Rail")
+        layout = QVBoxLayout(rail)
+        layout.setContentsMargins(RAIL_MARGIN, RAIL_MARGIN, RAIL_MARGIN, RAIL_MARGIN)
+        layout.setSpacing(RAIL_SPACING)
+
+        self.rail_toggle_button = styled_button("", "footer-icon")
+        self.rail_toggle_button.setIconSize(QSize(RAIL_ICON_SIZE, RAIL_ICON_SIZE))
+        self.rail_toggle_button.clicked.connect(self._toggle_rail)
+        layout.addWidget(self.rail_toggle_button)
+
         self.theme_button = styled_button("主題", "footer", "切換淺色 / 深色主題")
         self.theme_button.setMenu(self._build_theme_menu())
         self.about_button = styled_button("關於", "footer")
         self.console_button = styled_button("主控台", "footer", f"開關主控台 ({CONSOLE_SHORTCUT})")
         self.console_button.setCheckable(True)
+        self._rail_labels = {self.theme_button: "主題", self.about_button: "關於", self.console_button: "主控台"}
         for button, icon in (
-            (self.theme_button, theme_icon()), (self.about_button, about_icon()), (self.console_button, console_icon()),
+            (self.console_button, console_icon()), (self.theme_button, theme_icon()), (self.about_button, about_icon()),
         ):
             button.setIcon(icon)
-            button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
-        footer = QHBoxLayout()
-        footer.setSpacing(FOOTER_SPACING)
-        footer.addWidget(self.theme_button)
-        footer.addWidget(self.about_button)
-        footer.addWidget(self.console_button)
+            button.setIconSize(QSize(RAIL_ICON_SIZE, RAIL_ICON_SIZE))
+        layout.addWidget(self.console_button)
+
         self.record_button = None
         if self._xml_log_dir is not None:
-            # 只顯示圖示：搭配加寬後的側欄（292 px），四顆 footer 按鈕維持原本留白
-            self.record_button = styled_button("", "footer-icon", f"請求紀錄 ({RECORD_SHORTCUT})")
+            self.record_button = styled_button("查紀錄", "footer", f"請求紀錄 ({RECORD_SHORTCUT})")
             self.record_button.setIcon(record_icon())
-            self.record_button.setIconSize(QSize(FOOTER_ICON_SIZE, FOOTER_ICON_SIZE))
-            footer.addWidget(self.record_button)
-        footer.addStretch(1)
+            self.record_button.setIconSize(QSize(RAIL_ICON_SIZE, RAIL_ICON_SIZE))
+            self._rail_labels[self.record_button] = "查紀錄"
+            layout.addWidget(self.record_button)
 
-        layout.addWidget(self.app_title)
-        layout.addWidget(self.connection_list, 1)
-        layout.addLayout(footer)
-        return sidebar
+        layout.addStretch(1)
+        layout.addWidget(self.theme_button)
+        layout.addWidget(self.about_button)
+        return rail
+
+    def _read_rail_collapsed(self) -> bool:
+        if self._settings is None:
+            return False
+        return str(self._settings.value(RAIL_COLLAPSED_KEY)).lower() == "true"
+
+    def _save_rail_collapsed(self) -> None:
+        if self._settings is None:
+            return
+        self._settings.setValue(RAIL_COLLAPSED_KEY, self._rail_collapsed)
+        self._settings.sync()
+
+    @Slot()
+    def _toggle_rail(self) -> None:
+        self._rail_collapsed = not self._rail_collapsed
+        self._apply_rail_state()
+        self._save_rail_collapsed()
+
+    def _apply_rail_state(self) -> None:
+        collapsed = self._rail_collapsed
+        self.rail.setFixedWidth(RAIL_WIDTH_COLLAPSED if collapsed else RAIL_WIDTH_EXPANDED)
+        self.rail_toggle_button.setIcon(rail_toggle_icon(collapsed, self._theme.palette.text))
+        self.rail_toggle_button.setToolTip(f"{'展開' if collapsed else '收合'}側欄 ({RAIL_SHORTCUT})")
+        for button, label in self._rail_labels.items():
+            button.setText("" if collapsed else label)
+            button.setProperty("variant", "footer-icon" if collapsed else "footer")
+            repolish(button)
 
     def _build_theme_menu(self) -> QMenu:
         menu = QMenu(self)
@@ -325,6 +389,7 @@ class MainWindow(QMainWindow):
             self._workspace_shortcuts.append(shortcut)
         for key, handler in (
             ("F11", self._toggle_settings), ("Esc", self._on_escape), (CONSOLE_SHORTCUT, self.toggle_console),
+            (RAIL_SHORTCUT, self._toggle_rail),
         ):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.activated.connect(handler)
@@ -548,7 +613,10 @@ class MainWindow(QMainWindow):
         tag = (kind, self._seq, self._current_uuid)
         self._pending = tag
         self._set_busy(kind)
-        self._set_status("busy", "讀取中…" if kind == "load" else "執行中…")
+        self._wait_started = self._clock()
+        self._wait_timeout = self.timeout_spin.value()
+        self._show_waited()
+        self._wait_timer.start()
         self._tasks[tag] = run_in_background(
             tag, fn, *args, on_success=self._on_task_succeeded, on_failure=self._on_task_failed, **kwargs,
         )
@@ -561,7 +629,19 @@ class MainWindow(QMainWindow):
 
     def _finish(self) -> None:
         self._pending = None
+        self._wait_timer.stop()
         self._set_busy(None)
+
+    def _waited_seconds(self) -> int:
+        return int(self._clock() - self._wait_started)
+
+    @Slot()
+    def _show_waited(self) -> None:
+        """等待中每秒更新狀態列，讓使用者知道已等了幾秒、逾時設定為幾秒"""
+        if not self._pending:
+            return
+        label = "讀取中…" if self._pending[0] == "load" else "執行中…"
+        self._set_status("busy", label, f"已等待 {self._waited_seconds()} 秒 / 逾時 {self._wait_timeout} 秒")
 
     def _fields_enabled(self, busy: bool) -> bool:
         """工作區欄位可編輯的條件：沒有背景工作進行中，且目前有選取連線（F1）"""
@@ -595,15 +675,17 @@ class MainWindow(QMainWindow):
         self._tasks.pop(tag, None)
         if tag != self._pending:
             return
+        waited = self._waited_seconds()
         self._finish()
         if isinstance(error, ParamCountMismatch):
             self._notify("warning", str(error))
             self._set_status("error", "● 失敗", "參數數量不符")
             return
         action = "讀取 WSDL 失敗" if tag[0] == "load" else "請求失敗"
-        logger.opt(exception=error).error(action)
-        self._notify("error", f"{action}：{error}")
-        self._set_status("error", "● 失敗", action)
+        reason = describe_error(error, self._wait_timeout)
+        logger.opt(exception=error).error("{}：{}", action, reason)
+        self._notify("error", f"{action}：{reason}")
+        self._set_status("error", "● 失敗", f"{action} · 已等待 {waited} 秒")
 
     def _on_methods_loaded(self, uuid: str, methods: list[str]) -> None:
         if self._store.get(uuid) is None:
@@ -785,7 +867,7 @@ class MainWindow(QMainWindow):
             self.notification.show_message(bar.level, bar.text)
 
     def _set_settings_mode(self, active: bool) -> None:
-        """設定頁顯示期間停用連線清單與工作區快捷鍵，避免在看不到的地方送出請求；footer 按鈕（含主控台）維持可用"""
+        """設定頁顯示期間停用連線清單與工作區快捷鍵，避免在看不到的地方送出請求；rail 按鈕（含主控台）維持可用"""
         self.connection_list.setEnabled(not active)
         for shortcut in self._workspace_shortcuts:
             shortcut.setEnabled(not active)
@@ -830,6 +912,21 @@ class MainWindow(QMainWindow):
             self.notification.show_message(level, text)
 
     @Slot(object)
+    @Slot(object, object)
+    def _on_theme_about_to_change(self, _old: ThemePalette, new: ThemePalette) -> None:
+        """套用新主題前擷取舊畫面；視窗沒顯示時不做轉場"""
+        for reveal in self.findChildren(CircularReveal):
+            reveal.finish()  # 轉場中又切換：先結束舊的，擷取到的就是目前真實畫面
+        visible = self.isVisible() and not self.isMinimized()
+        self._reveal_from = (self.grab(), new) if visible else None
+
+    def _play_theme_reveal(self) -> None:
+        if self._reveal_from is None:
+            return
+        old, new = self._reveal_from
+        self._reveal_from = None
+        CircularReveal(self, old, self.grab(), reveal_origin(new, self.rect())).start()
+
     def _on_theme_changed(self, palette: ThemePalette) -> None:
         self.request_editor.set_colors(palette.xml)
         self.response_editor.set_colors(palette.xml)
@@ -840,6 +937,8 @@ class MainWindow(QMainWindow):
         self.console_panel.set_palette(palette)
         if self.xml_log_viewer is not None:
             self.xml_log_viewer.set_palette(palette)
+        self.rail_toggle_button.setIcon(rail_toggle_icon(self._rail_collapsed, palette.text))
+        self._play_theme_reveal()
 
     def apply_app_settings(self, settings: AppSettings, keys: Iterable[str] = HOT_RELOAD_KEYS) -> None:
         """熱重載 ws_tool.yaml 的 name、version、copyright、img、timeout；只套用 keys 列出的欄位"""

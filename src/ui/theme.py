@@ -132,6 +132,7 @@ _QSS = Template("""
 QWidget { color: $text; }
 QMainWindow, QDialog { background: $bg; }
 QFrame#Sidebar { background: $bg; border-right: 1px solid $border; }
+QFrame#Rail { background: $bg; border-right: 1px solid $border; }
 QLabel#AppTitle { font-size: 13pt; font-weight: 600; padding: 0 4px 4px 4px; }
 QLabel#PageTitle { font-size: 13pt; font-weight: 600; }
 QLabel#Placeholder { color: $text_muted; font-size: 11pt; }
@@ -207,9 +208,9 @@ QPushButton[variant="green"]:disabled, QPushButton[variant="orange"]:disabled, Q
 }
 QPushButton[variant="footer"], QPushButton[variant="footer-icon"] {
     background: $surface; border: 1px solid $border; border-radius: 8px;
-    padding: 6px 7px; font-size: 10.5pt; font-weight: 600;  /* 四顆 footer 按鈕要塞進側欄內容寬度 268 px */
+    padding: 6px 7px; font-size: 10.5pt; font-weight: 600;  /* 最左側 rail：主題／關於／主控台／請求紀錄／摺疊鈕 */
 }
-QPushButton[variant="footer-icon"] { padding: 6px 2px; }  /* 請求紀錄：僅圖示，留白可以更窄 */
+QPushButton[variant="footer-icon"] { padding: 6px 2px; }  /* 僅圖示（請求紀錄、摺疊鈕、摺疊狀態下的其他按鈕）留白可以更窄 */
 QPushButton[variant="footer"]:hover, QPushButton[variant="footer-icon"]:hover { background: $surface_hover; border-color: $accent; }
 QPushButton[variant="footer"]:checked, QPushButton[variant="footer-icon"]:checked { background: $surface_hover; border-color: $accent; }
 QPushButton::menu-indicator { width: 0; }
@@ -366,6 +367,7 @@ def repolish(widget: QWidget) -> None:
 
 
 class ThemeManager(QObject):
+    themeAboutToChange = Signal(object, object)  # 舊 palette, 新 palette；套用前送出，供擷取舊畫面做轉場
     themeChanged = Signal(object)
 
     def __init__(self, app: QApplication, settings: QSettings, arrow_dir: Path = ARROW_DIR):
@@ -437,6 +439,8 @@ class ThemeManager(QObject):
 
     def _refresh(self) -> None:
         palette = self._effective_palette()
+        if palette != self._palette:
+            self.themeAboutToChange.emit(self._palette, palette)
         self._palette = palette
         self._app.setPalette(build_qpalette(palette))
         arrows = write_arrow_images(palette.text_muted, self._arrow_dir)

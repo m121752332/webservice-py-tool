@@ -177,3 +177,25 @@ def test_header_and_tab_selectors_are_scoped_to_xml_log_viewer(palette, tmp_path
         assert not stripped.startswith("QHeaderView::section")
         assert not stripped.startswith("QTabWidget::pane")
         assert not stripped.startswith("QTabBar::tab")
+
+
+def test_about_to_change_emits_old_and_new_before_applying(qapp, settings):
+    manager = ThemeManager(qapp, settings)
+    manager.set_mode(ThemeMode.LIGHT)
+    manager.apply()
+    seen = []
+    manager.themeAboutToChange.connect(lambda old, new: seen.append((old, new, qapp.styleSheet())))
+    manager.set_mode(ThemeMode.DARK)
+    old, new, sheet = seen[0]
+    assert (old, new) == (LIGHT, DARK)
+    assert LIGHT.bg in sheet  # 送出時尚未套用新樣式，接收端可擷取舊畫面
+
+
+def test_about_to_change_not_emitted_when_palette_unchanged(qapp, settings):
+    manager = ThemeManager(qapp, settings)
+    manager.set_mode(ThemeMode.LIGHT)
+    manager.apply()
+    seen = []
+    manager.themeAboutToChange.connect(lambda old, new: seen.append(new))
+    manager.apply()
+    assert seen == []

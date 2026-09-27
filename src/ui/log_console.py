@@ -158,7 +158,7 @@ class ConsolePanel(QWidget):
         self.search_edit.setFixedWidth(220)
         self.clear_button = styled_button("清除", "subtle", "清除主控台記錄")
         self.copy_button = styled_button("複製", "subtle", "複製目前顯示的記錄")
-        self.close_button = styled_button("✕", "subtle", "關閉主控台 (Ctrl+`)")
+        self.close_button = styled_button("✕", "subtle", "關閉主控台 (Alt+C)")
         top = QHBoxLayout()
         top.addWidget(title)
         top.addStretch(1)
